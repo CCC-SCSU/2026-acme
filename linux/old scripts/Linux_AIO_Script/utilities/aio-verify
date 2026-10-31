@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# aio-verify - Verify Phase 1 and Phase 2 completed successfully
+
+echo "╔══════════════════════════════════════════════════╗"
+echo "║          AIO HARDENING VERIFICATION              ║"
+echo "╚══════════════════════════════════════════════════╝"
+echo ""
+
+EXIT_CODE=0
+
+# Phase 1 checks
+echo "Phase 1:"
+if [[ -f /var/log/aio_hardening/.phase1_complete ]]; then
+    echo "  ✓ Phase 1 completed"
+else
+    echo "  ✗ Phase 1 NOT completed"
+    EXIT_CODE=1
+fi
+
+# SSH disabled
+if systemctl is-active --quiet sshd 2>/dev/null || systemctl is-active --quiet ssh 2>/dev/null; then
+    echo "  ✗ SSH still running!"
+    EXIT_CODE=1
+else
+    echo "  ✓ SSH disabled"
+fi
+
+# Firewall active
+if iptables -L >/dev/null 2>&1; then
+    echo "  ✓ Firewall configured"
+else
+    echo "  ✗ Firewall not configured"
+    EXIT_CODE=1
+fi
+
+echo ""
+echo "Phase 2:"
+if [[ -f /var/log/aio_hardening/.phase2_complete ]]; then
+    echo "  ✓ Phase 2 completed"
+else
+    echo "  ✗ Phase 2 NOT completed"
+    EXIT_CODE=1
+fi
+
+# Monitoring active
+if [[ -d /var/log/redflags ]]; then
+    count=$(find /var/log/redflags -name "*.log" | wc -l)
+    echo "  ✓ Monitoring active ($count log files)"
+else
+    echo "  ✗ Monitoring NOT active"
+    EXIT_CODE=1
+fi
+
+echo ""
+if [[ $EXIT_CODE -eq 0 ]]; then
+    echo "✓ ALL CHECKS PASSED"
+else
+    echo "✗ SOME CHECKS FAILED"
+fi
+
+exit $EXIT_CODE

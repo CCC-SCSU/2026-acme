@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# aio-check-services - Verify expected services are running
+
+ROLE_FILE="/var/log/aio_hardening/detected_role.conf"
+
+if [[ ! -f "$ROLE_FILE" ]]; then
+    echo "No role detected. Run Phase 2 first."
+    exit 1
+fi
+
+. "$ROLE_FILE"
+
+echo "╔══════════════════════════════════════════════════╗"
+echo "║          SERVICE HEALTH CHECK                    ║"
+echo "╚══════════════════════════════════════════════════╝"
+echo ""
+echo "Role: $ROLE"
+echo "Expected Ports: $PORTS_TCP"
+echo ""
+
+case "$ROLE" in
+    ecomm)
+        systemctl is-active --quiet apache2 && echo "✓ Apache2: RUNNING" || echo "✗ Apache2: NOT RUNNING"
+        ;;
+    webmail)
+        systemctl is-active --quiet postfix && echo "✓ Postfix: RUNNING" || echo "✗ Postfix: NOT RUNNING"
+        systemctl is-active --quiet dovecot && echo "✓ Dovecot: RUNNING" || echo "✗ Dovecot: NOT RUNNING"
+        ;;
+    splunk)
+        pgrep -x splunkd >/dev/null && echo "✓ Splunk: RUNNING" || echo "✗ Splunk: NOT RUNNING"
+        ;;
+esac
+
+echo ""
+echo "Port Check:"
+IFS=',' read -ra PORTS <<< "$PORTS_TCP"
+for port in "${PORTS[@]}"; do
+    if ss -ltn | grep -q ":${port} "; then
+        echo "  ✓ Port $port: LISTENING"
+    else
+        echo "  ✗ Port $port: NOT LISTENING"
+    fi
+done

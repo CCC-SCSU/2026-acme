@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# aio-redflags - Summary of red flag monitoring logs
+
+REDFLAG_DIR="/var/log/redflags"
+MODE="${1:---last-hour}"
+
+case "$MODE" in
+    --last-hour)
+        SINCE="-60"
+        ;;
+    --last-day)
+        SINCE="-1440"
+        ;;
+    --all)
+        SINCE=""
+        ;;
+    *)
+        echo "Usage: $0 [--last-hour|--last-day|--all]"
+        exit 1
+        ;;
+esac
+
+echo "╔══════════════════════════════════════════════════╗"
+echo "║          RED FLAG SUMMARY $MODE         ║"
+echo "╚══════════════════════════════════════════════════╝"
+echo ""
+
+for log in "$REDFLAG_DIR"/*.log; do
+    if [[ -f "$log" ]]; then
+        basename=$(basename "$log")
+        if [[ -n "$SINCE" ]]; then
+            count=$(find "$log" -mmin "$SINCE" -exec wc -l {} \; 2>/dev/null | awk '{print $1}')
+        else
+            count=$(wc -l < "$log" 2>/dev/null)
+        fi
+        
+        if [[ -n "$count" && "$count" -gt 0 ]]; then
+            echo "📋 $basename: $count entries"
+            if [[ -n "$SINCE" ]]; then
+                find "$log" -mmin "$SINCE" -exec tail -5 {} \; 2>/dev/null
+            else
+                tail -5 "$log" 2>/dev/null
+            fi
+            echo ""
+        fi
+    fi
+done

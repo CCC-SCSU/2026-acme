@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# Comprehensive backup utility for competition systems
+# Backs up configs, databases, web content
+
+BACKUP_ROOT="/var/backups/aio"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="$BACKUP_ROOT/full_backup_$TIMESTAMP"
+
+mkdir -p "$BACKUP_DIR"/{configs,databases,web,misc}
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║           COMPREHENSIVE SYSTEM BACKUP                      ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Backup location: $BACKUP_DIR"
+echo ""
+
+# Configuration Files
+echo "[1/4] Backing up configuration files..."
+for dir in /etc/apache2 /etc/httpd /etc/nginx /etc/postfix /etc/dovecot /etc/ssh /etc/mysql /etc/postgresql; do
+    if [[ -d "$dir" ]]; then
+        echo "  → $(basename $dir)"
+        cp -r "$dir" "$BACKUP_DIR/configs/" 2>/dev/null || true
+    fi
+done
+
+# Important single config files
+for file in /etc/fstab /etc/hosts /etc/resolv.conf /etc/hostname /etc/exports /etc/samba/smb.conf; do
+    if [[ -f "$file" ]]; then
+        mkdir -p "$BACKUP_DIR/configs/$(dirname $file)"
+        cp "$file" "$BACKUP_DIR/configs/$file" 2>/dev/null || true
+    fi
+done
+
+# Firewall rules
+iptables-save > "$BACKUP_DIR/configs/iptables.rules" 2>/dev/null || true
+ufw status verbose > "$BACKUP_DIR/configs/ufw.status" 2>/dev/null || true
+firewall-cmd --list-all > "$BACKUP_DIR/configs/firewalld.conf" 2>/dev/null || true
+
+echo "  ✓ Configurations backed up"
+echo ""
+
+# Databases
+echo "[2/4] Backing up databases..."
+if command -v mysqldump >/dev/null 2>&1; then
+    echo "  → MySQL/MariaDB"
+    mysqldump --all-databases --single-transaction > "$BACKUP_DIR/databases/mysql_all.sql" 2>/dev/null || echo "  ! MySQL backup failed (check credentials)"
+fi
+
+if command -v pg_dumpall >/dev/null 2>&1; then
+    echo "  → PostgreSQL"
+    sudo -u postgres pg_dumpall > "$BACKUP_DIR/databases/postgres_all.sql" 2>/dev/null || echo "  ! PostgreSQL backup failed"
+fi
+
+echo "  ✓ Databases backed up"
+echo ""
+
+# Web Content
+echo "[3/4] Backing up web content..."
+for webroot in /var/www /usr/share/nginx/html /var/www/html; do
+    if [[ -d "$webroot" ]] && [[ -n "$(ls -A $webroot 2>/dev/null)" ]]; then
+        echo "  → $webroot"
+        tar -czf "$BACKUP_DIR/web/$(basename $webroot)_$TIMESTAMP.tar.gz" "$webroot" 2>/dev/null || true
+    fi
+done
+
+echo "  ✓ Web content backed up"
+echo ""
+
+# Miscellaneous Important Items
+echo "[4/4] Backing up miscellaneous items..."
+
+# Cron jobs
+echo "  → Cron jobs"
+for user in $(cut -f1 -d: /etc/passwd); do
+    crontab -u $user -l > "$BACKUP_DIR/misc/cron_$user" 2>/dev/null || true
+done
+cp -r /etc/cron.* "$BACKUP_DIR/misc/" 2>/dev/null || true
+
+# User accounts
+echo "  → User accounts"
+cp /etc/passwd "$BACKUP_DIR/misc/passwd"
+cp /etc/shadow "$BACKUP_DIR/misc/shadow" 2>/dev/null || true
+cp /etc/group "$BACKUP_DIR/misc/group"
+
+# Systemd services
+echo "  → Systemd services"
+systemctl list-unit-files > "$BACKUP_DIR/misc/systemd_services.txt" 2>/dev/null || true
+
+# Network configuration
+echo "  → Network configuration"
+ip addr > "$BACKUP_DIR/misc/ip_addr.txt"
+ip route > "$BACKUP_DIR/misc/ip_route.txt"
+
+echo "  ✓ Miscellaneous items backed up"
+echo ""
+
+# Create manifest
+echo "Creating backup manifest..."
+cat > "$BACKUP_DIR/MANIFEST.txt" << EOF
+AIO Hardening - Full System Backup
+===================================
+Timestamp: $(date)
+Hostname: $(hostname)
+Backup Location: $BACKUP_DIR
+
+Contents:
+- Configuration files (Apache, Nginx, Postfix, etc.)
+- Firewall rules (iptables/ufw/firewalld)
+- Database dumps (MySQL, PostgreSQL)
+- Web content (/var/www, etc.)
+- Cron jobs (all users)
+- User accounts (/etc/passwd, /etc/shadow, /etc/group)
+- Systemd services
+- Network configuration
+
+To restore:
+1. Extract web content: tar -xzf web/*.tar.gz -C /
+2. Restore databases: mysql < databases/mysql_all.sql
+3. Copy configs back: cp -r configs/etc/* /etc/
+4. Restore firewall: iptables-restore < configs/iptables.rules
+
+IMPORTANT: Test restores on a non-production system first!
+EOF
+
+# Calculate backup size
+BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | awk '{print $1}')
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║              BACKUP COMPLETE                               ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Location: $BACKUP_DIR"
+echo "Size: $BACKUP_SIZE"
+echo ""
+echo "Quick restore commands:"
+echo "  Configs:   sudo cp -r $BACKUP_DIR/configs/etc/* /etc/"
+echo "  MySQL:     mysql < $BACKUP_DIR/databases/mysql_all.sql"
+echo "  Web:       tar -xzf $BACKUP_DIR/web/*.tar.gz -C /"
+echo "  Firewall:  iptables-restore < $BACKUP_DIR/configs/iptables.rules"
+echo ""
+echo "View manifest: cat $BACKUP_DIR/MANIFEST.txt"
