@@ -1,0 +1,38 @@
+TINY CORE  --  roadrunner (.12, K8S services)
+
+READ THIS FIRST
+  The main kit (ccdc/go) will NOT work here and you should not try it.
+  Tiny Core is busybox-based: no systemd, no apt/dnf/pacman, and the filesystem is mostly in RAM.
+  Use the plan-b scripts, which are plain /bin/sh and work on busybox.
+
+  Tiny Core normally RESETS ON REBOOT. Changes survive only if they are saved into the persistence
+  setup (usually /opt/.filetool.lst + 'filetool.sh -b', or an mydata.tgz backup). Before you change
+  anything, find out how this box persists, or your work vanishes the moment red team reboots it.
+      cat /opt/.filetool.lst 2>/dev/null
+      ls /mnt/*/tce/ 2>/dev/null
+END
+
+ORDER
+  1.  sudo sh ../plan-b/1-look.sh        see what is here       (read only)
+  2.  sudo sh ../plan-b/5-hunt.sh        hunt for red team      (read only)
+  3.  sudo sh ../plan-b/3-keep.sh check 6443 10250    check K8S ports once
+  4.  Passwords, one at a time:  sudo sh ../plan-b/2-pw.sh <user>
+
+KUBERNETES NOTES
+  Common ports: 6443 (API server), 2379/2380 (etcd), 10250 (kubelet), 30000-32767 (NodePort).
+  * The API server on 6443 is the crown jewel. Anyone who reaches it with a valid token owns
+    the cluster.
+  * ETCD ON 2379 SHOULD NEVER BE REACHABLE FROM OUTSIDE THE NODE. It holds every secret in the
+    cluster in plain form. Check:   ss -ltn | grep 2379
+  * Look for things you did not deploy:
+        kubectl get pods --all-namespaces
+        kubectl get clusterrolebindings
+        kubectl get serviceaccounts --all-namespaces
+    A pod running from a public image you do not recognise, or a service account bound to
+    cluster-admin, is red team.
+  * Do NOT firewall this box blindly. K8S needs a lot of internal traffic and a default-deny
+    rule will take the whole cluster down, which may be several scored services at once.
+
+IF YOU ARE OUT OF TIME ON THIS BOX
+  Skip it. Spend the time on a box you understand. A half-configured firewall on a K8S node
+  can cost more points than leaving it alone.

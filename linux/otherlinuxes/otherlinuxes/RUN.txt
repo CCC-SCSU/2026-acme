@@ -1,0 +1,35 @@
+DEBIAN  --  daffy (.11, Blog)  and  taz (.169, Debian 13, Photo Management)
+
+GOTCHAS
+ * Debian 13 (taz) usually has NO working iptables -- only nftables. The kit detects this and
+   builds its own table 'inet ccdc'. Your other rules are left alone.
+ * ufw may be installed. If 'ufw status' says active, the kit's rules and ufw will fight.
+   Pick ONE. Simplest: 'ufw disable' then use the kit, or skip the kit's firewall and use ufw.
+ * The blog and photo app each have a config file holding a DATABASE PASSWORD. If you change the
+   DB password you MUST change it there too, in the same minute, or the site 500s and you lose points.
+ * apt updates can restart the web server. Do them early or not at all.
+END
+
+ORDER
+  1.  sudo bash run.sh d            dry run -- read what it plans
+  2.  sudo bash run.sh r            recon + backup. READ the RED FLAGS block.
+  3.  sudo bash ../web-harden.sh    scan the web root for webshells (report only, no changes)
+  4.  sudo bash run.sh              the full guided run
+  5.  Firewall LAST, after step 6 tells you the real ports.
+
+FINDING THE PORTS (do this before the firewall step)
+  sudo bash ../firewall.sh suggest
+  sudo bash ../services.sh discover
+  Likely: 80, 443 for both boxes. The DB (3306/5432) should normally be LOCAL ONLY --
+  if it only listens on 127.0.0.1, do NOT open it.
+
+WATCHDOG (start this early, it protects your score)
+  sudo bash ../services.sh discover
+  sudo nano /etc/ccdc/services.conf     delete non-scored ports, fix any FIXME- names
+  sudo bash ../services.sh watch 30 &
+
+IF THE WEBSITE BREAKS
+  systemctl status apache2 nginx
+  journalctl -u apache2 -n 50
+  Config test:  apache2ctl -t     or     nginx -t
+  The kit backed the web root up to /opt/html.BAK.* before touching anything.

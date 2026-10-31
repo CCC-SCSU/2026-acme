@@ -1,0 +1,39 @@
+ROCKY LINUX  --  foghorn (.13, Wiki/Chat)  and  sylvester (.69, Video Streamer)
+
+GOTCHAS
+ * firewalld is running. Do NOT flush iptables by hand -- firewalld owns the rules and will
+   fight you. The kit detects firewalld and uses firewall-cmd. Changes are runtime-only until
+   you confirm, so a mistake reverts itself.
+ * SELINUX IS ENFORCING. This bites in three places:
+     - changing the SSH port needs 'semanage port -a'. The kit REFUSES rather than half-applying
+       if semanage is missing. Install: dnf install policycoreutils-python-utils
+     - if you edit a config in place, run 'restorecon <file>' after
+     - if a service starts but cannot read its own files, suspect SELinux before anything else:
+           ausearch -m avc -ts recent      or      journalctl -t setroubleshoot
+ * The web server is 'httpd', not 'apache2'. Web root is usually /var/www/html.
+ * Chat apps are often on an odd port behind a reverse proxy (Mattermost 8065, Rocket.Chat 3000).
+   The scored check may hit 443 only. Look before you block.
+END
+
+ORDER
+  1.  sudo bash run.sh d        dry run
+  2.  sudo bash run.sh r        recon + backup. READ the RED FLAGS block.
+  3.  sudo bash run.sh          full guided run
+  4.  Firewall last.
+
+FINDING THE PORTS
+  sudo bash ../firewall.sh suggest
+  sudo firewall-cmd --list-all
+  sudo bash ../services.sh discover
+
+WATCHDOG
+  sudo bash ../services.sh discover
+  sudo nano /etc/ccdc/services.conf
+  sudo bash ../services.sh watch 30 &
+
+IF A SERVICE WON'T START AFTER YOU CHANGED SOMETHING
+  systemctl status <name> ; journalctl -u <name> -n 50
+  getenforce                         is SELinux the problem?
+  ausearch -m avc -ts recent         what did it block?
+  restorecon -Rv /path/to/files      fix the labels
+  Do NOT 'setenforce 0' to make a problem go away -- that is free points for red team.

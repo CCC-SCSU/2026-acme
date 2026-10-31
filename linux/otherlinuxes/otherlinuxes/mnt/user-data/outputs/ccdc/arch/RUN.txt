@@ -1,0 +1,42 @@
+ARCH  --  porky (.67, Tracker)
+
+GOTCHAS
+ * DO NOT RUN 'pacman -Syu' DURING THE COMPETITION. Arch is a rolling release: a full upgrade can
+   pull a new kernel/library set and break the scored service with no easy way back.
+ * You also cannot safely install ONE package. 'pacman -S foo' grabs the current repo version and
+   that is a partial upgrade. If you must repair a binary, restore it from /var/cache/pacman/pkg
+   (the exact version you already had) instead.
+ * Arch usually has NO cron. Persistence hides in systemd timers instead:
+       systemctl list-timers --all
+ * The ssh unit is 'sshd.service' (not ssh.service). The kit handles this.
+ * Arch may ship with NO firewall tool at all. Check first:
+       command -v nft iptables
+   If both are missing you cannot firewall this box without installing something, which means a
+   partial upgrade. In that case: skip the firewall, and lean harder on the watchdog + hunting.
+ * sudo may not be installed. Check 'command -v sudo'. If missing, use 'su -' for a root shell.
+END
+
+ORDER
+  1.  sudo bash run.sh d        dry run
+  2.  sudo bash run.sh r        recon + backup. READ the RED FLAGS block.
+  3.  sudo bash ../pkgcheck.sh verify      (slow: checks every package's files)
+      sudo bash ../pkgcheck.sh extras      (what was installed recently / from the AUR)
+  4.  sudo bash run.sh          full guided run
+      -> say NO to updates when it asks. See the gotcha above.
+
+"TRACKER" COULD BE ANYTHING
+  The packet does not say what it is. Find out before you firewall it:
+      sudo bash ../firewall.sh suggest
+      sudo bash ../services.sh discover
+      systemctl list-units --type=service --state=running
+  A web tracker is 80/443. A torrent tracker may use 6969 or 8080. Do not guess -- look.
+
+WATCHDOG
+  sudo bash ../services.sh discover
+  sudo nano /etc/ccdc/services.conf
+  sudo bash ../services.sh watch 30 &
+
+IF A BINARY LOOKS TAMPERED WITH
+  pacman -Qkk <package>              check that one package's files
+  ls /var/cache/pacman/pkg/          the packages you already have, by version
+  Restore a single file from a cached package instead of reinstalling from the repo.

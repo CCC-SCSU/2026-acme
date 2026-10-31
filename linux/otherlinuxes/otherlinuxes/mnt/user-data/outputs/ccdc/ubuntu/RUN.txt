@@ -1,0 +1,35 @@
+UBUNTU  --  elmer (.77, 22.04, Forums)  and  marvin (.199, Database)
+
+GOTCHAS
+ * MARVIN IS THE DATABASE. Think before you open its port. If the DB only serves the web boxes,
+   it should listen on an internal address and be reachable from THEM, not from the whole network.
+   Check what it is bound to:   ss -ltnp | grep -E '3306|5432'
+   If the scoring engine checks the DB directly you must leave it open -- confirm before closing it.
+   Getting this wrong in either direction costs points, so look it up rather than guessing.
+ * ufw is often installed on Ubuntu. If 'ufw status' says active, do not also use the kit's
+   firewall. Pick one.
+ * Ubuntu 22.10+ uses ssh.socket, where the Port line in sshd_config is ignored. 22.04 does not.
+   The kit detects this and tells you rather than silently doing nothing.
+ * The forums app has a config file with the DB password in it. Change both together or the
+   forum goes down.
+END
+
+ORDER
+  1.  sudo bash run.sh d        dry run
+  2.  sudo bash run.sh r        recon + backup. READ the RED FLAGS block.
+  3.  sudo bash run.sh          full guided run
+  4.  Firewall last.
+
+DATABASE BOX EXTRAS (marvin)
+  Back the data up before anything else -- the kit does this, but verify it worked:
+      ls -lh /root/backup-*/        look for mysql-all.sql or pg-all.sql
+      scp /root/backup-*/*.sql you@yourmachine:
+  Check for accounts you did not create:
+      mysql -e "SELECT user,host FROM mysql.user;"
+      sudo -u postgres psql -c '\du'
+  Red team loves a DB with a blank or reused root password.
+
+WATCHDOG
+  sudo bash ../services.sh discover
+  sudo nano /etc/ccdc/services.conf
+  sudo bash ../services.sh watch 30 &
