@@ -1,0 +1,175 @@
+================================================================================
+ HOW TO RUN EVERYTHING                      WRCCDC 2026 Invitational 2 / Acme
+================================================================================
+
+If you want the exhaustive list of every command and setting: cat COMMANDS.txt
+Every script also responds to --help.
+
+WHICH FOLDER FOR WHICH BOX
+   192.168.220.11   daffy      Debian         Blog           ->  debian/
+   192.168.220.169  taz        Debian 13      Photo Mgmt     ->  debian/
+   192.168.220.67   porky      Arch           Tracker        ->  arch/
+   192.168.220.13   foghorn    Rocky Linux    Wiki/Chat      ->  rocky/
+   192.168.220.69   sylvester  Rocky Linux    Video Streamer ->  rocky/
+   192.168.220.77   elmer      Ubuntu 22.04   Forums         ->  ubuntu/
+   192.168.220.199  marvin     Ubuntu         Database       ->  ubuntu/
+   192.168.220.12   roadrunner Tiny Core      K8S            ->  tinycore/  (plan-b only)
+   192.168.220.1/.2 tweety     OPNsense       ROUTER         ->  NOTHING. See OPNSENSE.md.
+
+   From outside the router these are 10.100.1XX.Y, NATed to 192.168.220.Y.
+   Same box, different address depending on which side you are on.
+
+--------------------------------------------------------------------------------
+STEP 1  GET THE KIT ONTO THE BOX
+--------------------------------------------------------------------------------
+Easiest: serve it from your own VPN machine.
+
+   On your machine, in the folder holding ccdc.tgz:
+       python3 -m http.server 8000
+
+   On each box:
+       curl -O http://YOUR-VPN-IP:8000/ccdc.tgz
+       tar xzf ccdc.tgz
+
+   No curl? try:   wget http://YOUR-VPN-IP:8000/ccdc.tgz
+   Or push it:     scp ccdc.tgz user@192.168.220.11:
+
+--------------------------------------------------------------------------------
+STEP 2  RUN IT  (three commands, in this order, on every box)
+--------------------------------------------------------------------------------
+   cd ccdc
+   sudo bash debian/run.sh d      <- DRY RUN. Prints its plan. Changes NOTHING.
+   sudo bash debian/run.sh r      <- RECON. Inventory + backup + red flags. No changes.
+   sudo bash debian/run.sh        <- FULL guided run. Asks before every change.
+
+   Swap "debian" for arch, rocky, or ubuntu depending on the box.
+   Each run.sh prints that OS's traps before it starts. Read them.
+
+   Typing shortcut: sudo bash de<TAB>/run.sh d
+
+--------------------------------------------------------------------------------
+STEP 3  WHAT THE FULL RUN ASKS YOU
+--------------------------------------------------------------------------------
+Enter accepts the default. [Y/n] means yes by default, [y/N] means no by default.
+Everything risky defaults to NO.
+
+  "Continue to hardening?"          Y, once you have read the red flags.
+
+  "Accounts to SKIP when rotating"  Type the scoring/service account names, space
+                                    separated. If you do not know them yet, type the
+                                    service accounts you can see and come back later.
+
+  "Create a new sudo admin?"        Y. It makes you an account that is not root and
+                                    tests sudo works. Do this before locking root.
+
+  "Rotate passwords ... now?"       Y, but ONLY if you are ready to write them down
+                                    and submit them to the scoring engine.
+
+  -> The screen then shows the new passwords ONCE. WRITE THEM ON PAPER.
+     Press Enter and they are shredded off the disk.
+     Then submit them: https://scoring.wccomps.org/   (NOT a ticket)
+
+  "Apply package updates?"          N on Arch, always. N elsewhere unless you have time.
+
+  "Harden Apache / sshd?"           Y. Both test their config and undo themselves if
+                                    it is broken.
+
+  "SSH allow-list"                  Your login is pre-filled. ADD any scoring user if
+                                    SSH is scored on this box.
+
+  "Allowed inbound TCP ports"       Pre-filled with everything currently listening.
+                                    DELETE anything that is not a scored service.
+
+  "Restrict SSH to this range"      LEAVE BLANK. SSH is in the scored protocol list.
+
+  "Keep these rules?"               Test from a SECOND window first. If you do not
+                                    answer, the firewall undoes itself in 5 minutes.
+
+  "Start the service watchdog?"     Y. This is the thing that protects your uptime score.
+
+--------------------------------------------------------------------------------
+STEP 4  KEEP SERVICES UP  (the single highest-value thing you do)
+--------------------------------------------------------------------------------
+Scoring runs every 2-4 minutes. An SLA hits after 5 failed checks, so you have
+roughly 10-20 minutes to notice and fix anything. The watchdog does it for you.
+
+   sudo bash services.sh discover          build the watch list
+   sudo nano /etc/ccdc/services.conf       delete non-scored ports; fix FIXME- names
+   sudo bash services.sh check             check once
+   sudo bash services.sh watch 30 &        run it, auto-restarts what dies
+   sudo bash services.sh status            what has been restarting
+   sudo pkill -f 'services.sh watch'       stop it
+
+It restarts a dead service at most 3 times per 15 minutes, then waits for a human.
+A service that keeps dying is being killed by someone, not crashing on its own.
+
+--------------------------------------------------------------------------------
+STEP 5  WATCH FOR RED TEAM, ALL DAY
+--------------------------------------------------------------------------------
+   sudo bash baseline.sh snap        once, after you finish hardening
+   sudo bash baseline.sh diff        what changed since then
+   tail -f /root/ccdc-logs/alerts.log   if you started the background monitor
+   sudo bash persistence.sh          re-hunt any time something feels wrong
+
+--------------------------------------------------------------------------------
+CAN I TRUST THIS BOX'S TMUX / BASH / PACKAGE MANAGER?
+--------------------------------------------------------------------------------
+   sudo sh tools/3-check.sh      read-only: are the binaries and the package
+                                 manager config still what they should be?
+   sudo sh tools/4-fixrepo.sh    clean up a tampered package manager (asks first)
+
+   Best answer is usually to run tmux on YOUR machine and ssh out from inside it,
+   so the box's tmux never touches your keystrokes. Full details: tools/README.txt
+
+--------------------------------------------------------------------------------
+IF THE KIT WILL NOT RUN -- PLAN B
+--------------------------------------------------------------------------------
+Five standalone /bin/sh scripts. They share no code with the kit and work on busybox.
+
+   sudo sh plan-b/1-look.sh              see the box          (read only)
+   sudo sh plan-b/5-hunt.sh              find red team        (read only)
+   sudo sh plan-b/2-pw.sh bob            one password at a time
+   sudo sh plan-b/3-keep.sh 80 443 &     keep services up
+   sudo sh plan-b/4-wall.sh 22 80 443    firewall, undoes itself in 5 min
+   sudo sh plan-b/4-wall.sh keep         keep those rules
+   sudo sh plan-b/4-wall.sh undo         put the old rules back
+
+Full details: plan-b/PLAN-B.txt
+
+--------------------------------------------------------------------------------
+WHEN SOMETHING GOES WRONG
+--------------------------------------------------------------------------------
+ Locked out by the firewall    Wait 5 minutes, it reverts itself.
+                               Or from the Proxmox console: sh /root/UNDO-FIREWALL.sh
+                               Or:  sudo bash firewall.sh undo
+
+ SSH broke after hardening     The kit restores sshd_config automatically if the config
+                               fails its test. If you are still locked out, use the
+                               Proxmox console and check: /etc/ssh/sshd_config.bak.*
+
+ Service down, will not start  systemctl status <name>
+                               journalctl -u <name> -n 50
+                               On Rocky: getenforce ; ausearch -m avc -ts recent
+
+ Website 500s after a change   Did you change the DB password without updating the app
+                               config? The kit lists those files during web-harden.
+                               Web root backup: /opt/html.BAK.*
+
+ Lost the new passwords        They were shredded on purpose. Use the Proxmox console
+                               to log in and set them again with plan-b/2-pw.sh.
+
+ "Permission denied"           You forgot sudo.
+ "No such file"                You are in the wrong directory. cd into ccdc/ first.
+ Script will not execute       Use  bash script.sh  or  sh script.sh, not ./script.sh
+
+--------------------------------------------------------------------------------
+THINGS THAT COST POINTS -- DO NOT DO THESE
+--------------------------------------------------------------------------------
+ * Running anything from this kit on tweety (the OPNsense router). Reset = -100.
+ * Changing a scoring account password without submitting it to the scoring engine.
+ * Blocking the scoring engine with a firewall rule.
+ * Leaving passwords in a file on the box. Red team recovering credentials = -50.
+ * 'setenforce 0' on Rocky to make an error go away.
+ * 'pacman -Syu' on Arch mid-competition.
+ * Rebooting a box to "fix" something without telling your team.
+================================================================================
