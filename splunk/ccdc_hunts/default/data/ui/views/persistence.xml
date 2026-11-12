@@ -1,0 +1,180 @@
+<form version="1.1" theme="dark">
+  <label>Persistence &amp; Tampering</label>
+  <description>Someone setting up a way back in, or trying to blind you.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Alert: Event log cleared</title>
+      <html><p><b>Severity 6.</b> Someone wiped a Windows event log to hide what they did. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=10&amp;nameddest=event-log-cleared" target="_blank">Playbook steps (page 10)</a></p></html>
+      <table>
+        <search>
+          <query>(`windows_security` EventCode=1102) OR (`windows_system` EventCode=104) | eval who=mvindex(Account_Name,0) | table _time host source who</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Logging stopped or reconfigured</title>
+      <html><p><b>Severity 5.</b> Sysmon or the Splunk forwarder stopped, or Sysmon's config changed. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=12&amp;nameddest=logging-stopped-or-reconfigured" target="_blank">Playbook steps (page 12)</a></p></html>
+      <table>
+        <search>
+          <query>(`windows_sysmon` ((EventCode=4 State="Stopped") OR EventCode=16)) OR (`windows_system` EventCode=7036 "stopped" ("Sysmon" OR "Splunk")) | table _time host source EventCode State Configuration Message</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Defender turned off or exclusion added</title>
+      <html><p><b>Severity 5.</b> Defender protection was turned off or a scanning exclusion was added. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=10&amp;nameddest=defender-turned-off-or-exclusion-added" target="_blank">Playbook steps (page 10)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_defender` (EventCode=5001 OR EventCode=5010 OR EventCode=5012 OR (EventCode=5007 "Exclusions")) | table _time host EventCode Message</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Defender detected malware</title>
+      <html><p><b>Severity 5.</b> Defender found malware or acted on it. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=10&amp;nameddest=defender-detected-malware" target="_blank">Playbook steps (page 10)</a> &#183; <a href="/en-US/app/ccdc_hunts/search?q=search%20%60windows_sysmon%60%20host%3D%22%2A%22%20EventCode%3D11%20TargetFilename%3D%22%2A%22%20%7C%20table%20_time%20User%20Image%20TargetFilename&amp;earliest=$t.earliest|u$&amp;latest=$t.latest|u$" target="_blank">Run the scope search</a></p></html>
+      <table>
+        <search>
+          <query>`windows_defender` EventCode IN (1116,1117) | table _time host EventCode Name Path Process_Name User</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Autorun or IFEO registry change</title>
+      <html><p><b>Severity 5.</b> A Run key, Winlogon value or sticky-keys debugger was set. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=11&amp;nameddest=autorun-or-ifeo-registry-change" target="_blank">Playbook steps (page 11)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode IN (12,13,14) (TargetObject="*CurrentVersion*Run*" OR TargetObject="*Winlogon*Userinit*" OR TargetObject="*Winlogon*Shell*" OR TargetObject="*Image File Execution Options*Debugger*") NOT TargetObject="*RunMRU*" | table _time host User Image EventType TargetObject Details</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: WMI event subscription created</title>
+      <html><p><b>Severity 5.</b> A WMI subscription that runs a command was created: a hidden way back in. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=11&amp;nameddest=wmi-event-subscription-created" target="_blank">Playbook steps (page 11)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode IN (19,20,21) | table _time host User EventType Operation Name Query Destination Consumer Filter</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Script host running a disguised file</title>
+      <html><p><b>Severity 5.</b> wscript or cscript was forced to run a non-script file with //E:, like JScript hidden in a file named like a log. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=12&amp;nameddest=script-host-running-a-disguised-file" target="_blank">Playbook steps (page 12)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=1 Image IN ("*wscript.exe","*cscript.exe") CommandLine="*//E:*" | table _time host User ParentImage CommandLine ProcessId</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Scheduled task created</title>
+      <html><p><b>Severity 4.</b> A new scheduled task was registered. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=13&amp;nameddest=scheduled-task-created" target="_blank">Playbook steps (page 13)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4698 | eval created_by=mvindex(Account_Name,0) | table _time host created_by Task_Name</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Suspicious PowerShell</title>
+      <html><p><b>Severity 4.</b> A PowerShell script contained download, decode or Defender-tampering code. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=13&amp;nameddest=suspicious-powershell" target="_blank">Playbook steps (page 13)</a> &#183; <a href="/en-US/app/ccdc_hunts/search?q=search%20%60windows_sysmon%60%20host%3D%22%2A%22%20EventCode%3D3%20Image%3D%22%2Apowershell.exe%22%20%7C%20table%20_time%20User%20DestinationIp%20DestinationPort&amp;earliest=$t.earliest|u$&amp;latest=$t.latest|u$" target="_blank">Run the scope search</a></p></html>
+      <table>
+        <search>
+          <query>`windows_powershell` EventCode=4104 ("DownloadString" OR "DownloadFile" OR "Net.WebClient" OR "Invoke-WebRequest" OR "IEX" OR "Invoke-Expression" OR "FromBase64String" OR "Add-MpPreference" OR "Set-MpPreference" OR "MSFT_TaskIdleTrigger" OR "Invoke-Mimikatz" OR "AmsiUtils") | table _time host Message</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>All new services (System 7045)</title>
+      <table>
+        <search>
+          <query>`windows_system` EventCode=7045 | table _time host Service_Name Service_File_Name Service_Account</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Scripts and programs dropped in hiding spots</title>
+      <html><p>The folders the invitational red team's dropper used.</p></html>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=11 (TargetFilename="*ProgramData*Microsoft*Windows*WER*" OR TargetFilename="*ProgramData*Microsoft*Diagnosis*" OR TargetFilename="*Power Efficiency Diagnostics*" OR TargetFilename="*Windows*Temp*") (TargetFilename="*.js" OR TargetFilename="*.vbs" OR TargetFilename="*.ps1" OR TargetFilename="*.bat" OR TargetFilename="*.exe" OR TargetFilename="*.dll" OR TargetFilename="*.hta") | table _time host User Image TargetFilename</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>BITS jobs (bitsadmin)</title>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=1 Image="*bitsadmin.exe" | table _time host User ParentImage CommandLine</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

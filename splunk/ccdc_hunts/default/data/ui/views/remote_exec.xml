@@ -1,18 +1,16 @@
 <form version="1.1" theme="dark">
-  <label>Remote Execution Hunt</label>
-  <description>smbexec, wmiexec, atexec and WinRM activity. Any row in the first four panels deserves a look.</description>
+  <label>Remote Execution</label>
+  <description>Someone running commands on a Windows box from another machine.</description>
   <fieldset submitButton="false">
     <input type="time" token="t">
       <label>Time range</label>
-      <default>
-        <earliest>-4h</earliest>
-        <latest>now</latest>
-      </default>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
     </input>
   </fieldset>
   <row>
     <panel>
-      <title>smbexec: new services that run cmd, .bat or PowerShell (System 7045)</title>
+      <title>Alert: smbexec service runs cmd</title>
+      <html><p><b>Severity 6.</b> A new service runs cmd, a .bat file or PowerShell. smbexec makes one per command. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=4&amp;nameddest=smbexec-service-runs-cmd" target="_blank">Playbook steps (page 4)</a> &#183; <a href="/en-US/app/ccdc_hunts/search?q=search%20%60windows_security%60%20host%3D%22%2A%22%20EventCode%3D4624%20Logon_Type%3D3%20%7C%20eval%20user%3Dmvindex%28Account_Name%2C-1%29%20%7C%20search%20NOT%20user%3D%22%2A%24%22%20%7C%20table%20_time%20user%20Source_Network_Address&amp;earliest=$t.earliest|u$&amp;latest=$t.latest|u$" target="_blank">Run the scope search</a></p></html>
       <table>
         <search>
           <query>`windows_system` EventCode=7045 (Service_File_Name="*COMSPEC*" OR Service_File_Name="*cmd*" OR Service_File_Name="*.bat*" OR Service_File_Name="*powershell*") | table _time host Service_Name Service_File_Name Service_Account</query>
@@ -26,7 +24,8 @@
   </row>
   <row>
     <panel>
-      <title>smbexec: cmd or PowerShell started by services.exe (Sysmon 1)</title>
+      <title>Alert: smbexec cmd started by services.exe</title>
+      <html><p><b>Severity 5.</b> cmd or PowerShell started directly by services.exe: smbexec's service actually running. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=5&amp;nameddest=smbexec-cmd-started-by-servicesexe" target="_blank">Playbook steps (page 5)</a> &#183; <a href="/en-US/app/ccdc_hunts/search?q=search%20%60windows_sysmon%60%20host%3D%22%2A%22%20EventCode%3D1%20ParentImage%3D%22%2Acmd.exe%22%20%7C%20table%20_time%20User%20ParentCommandLine%20Image%20CommandLine&amp;earliest=$t.earliest|u$&amp;latest=$t.latest|u$" target="_blank">Run the scope search</a></p></html>
       <table>
         <search>
           <query>`windows_sysmon` EventCode=1 ParentImage="*services.exe" Image IN ("*cmd.exe","*powershell.exe","*pwsh.exe") | table _time host User ParentImage Image CommandLine</query>
@@ -40,7 +39,8 @@
   </row>
   <row>
     <panel>
-      <title>Other remote exec: shells under WMI, WinRM or Task Scheduler (Sysmon 1)</title>
+      <title>Alert: Shell under WMI, WinRM or Task Scheduler</title>
+      <html><p><b>Severity 4.</b> A shell or script host started by WMI (wmiexec), WinRM or Task Scheduler (atexec). <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=5&amp;nameddest=shell-under-wmi-winrm-or-task-scheduler" target="_blank">Playbook steps (page 5)</a></p></html>
       <table>
         <search>
           <query>`windows_sysmon` EventCode=1 (ParentImage="*WmiPrvSE.exe" OR ParentImage="*wsmprovhost.exe" OR ParentImage="*taskeng.exe" OR ParentCommandLine="*-s Schedule*") Image IN ("*cmd.exe","*powershell.exe","*pwsh.exe","*wscript.exe","*cscript.exe","*mshta.exe","*rundll32.exe") | table _time host User ParentImage Image CommandLine</query>
@@ -54,7 +54,8 @@
   </row>
   <row>
     <panel>
-      <title>Batch files written to Windows\Temp (Sysmon 11)</title>
+      <title>Alert: Batch file written to Windows Temp</title>
+      <html><p><b>Severity 4.</b> A .bat file appeared in C:\Windows\Temp, like smbexec's temporary batch file. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=6&amp;nameddest=batch-file-written-to-windows-temp" target="_blank">Playbook steps (page 6)</a></p></html>
       <table>
         <search>
           <query>`windows_sysmon` EventCode=11 TargetFilename="*Windows*Temp*.bat" | table _time host User Image TargetFilename</query>
@@ -65,17 +66,31 @@
         <option name="wrap">true</option>
       </table>
     </panel>
-  </row>
-  <row>
     <panel>
-      <title>Who is logging in over the network, and from where (Security 4624, type 3)</title>
+      <title>Alert: whoami run</title>
+      <html><p><b>Severity 4.</b> Someone ran whoami, usually an attacker's first command after getting a shell. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=6&amp;nameddest=whoami-run" target="_blank">Playbook steps (page 6)</a></p></html>
       <table>
         <search>
-          <query>`windows_security` EventCode=4624 Logon_Type=3 | eval user=mvindex(Account_Name,-1) | search NOT user="*$$" | stats count latest(_time) as last_seen by host user Source_Network_Address | convert ctime(last_seen) | sort - count</query>
+          <query>(`windows_sysmon` EventCode=1 Image="*whoami.exe") OR (`windows_security` EventCode=4688 New_Process_Name="*whoami.exe") | eval user=coalesce(User, mvindex(Account_Name,0)), parent=coalesce(ParentImage, Creator_Process_Name), command=coalesce(CommandLine, Process_Command_Line) | table _time host user parent command source</query>
           <earliest>$t.earliest$</earliest>
           <latest>$t.latest$</latest>
         </search>
-        <option name="count">15</option>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Network logons: who, and from where</title>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4624 Logon_Type=3 | eval user=mvindex(Account_Name,-1) | search NOT user="*$$" NOT user="ANONYMOUS LOGON" | stats count latest(_time) as last by host user Source_Network_Address | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
       </table>
     </panel>
   </row>

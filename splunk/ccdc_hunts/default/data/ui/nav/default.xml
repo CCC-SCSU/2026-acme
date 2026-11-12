@@ -1,4 +1,14 @@
 <nav search_view="search">
-  <view name="remote_exec" default="true" />
+  <view name="overview" default="true" />
+  <collection label="Windows">
+    <view name="remote_exec" />
+    <view name="accounts" />
+    <view name="persistence" />
+  </collection>
+  <view name="linux" />
+  <view name="web_mail_ftp" />
+  <view name="network" />
+  <view name="health" />
   <view name="search" />
+  <a href="/en-US/static/app/ccdc_hunts/playbook.pdf" target="_blank">Playbook</a>
 </nav>

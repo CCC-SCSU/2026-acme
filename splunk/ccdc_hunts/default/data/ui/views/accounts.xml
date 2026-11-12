@@ -1,0 +1,165 @@
+<form version="1.1" theme="dark">
+  <label>Accounts &amp; Logons</label>
+  <description>Someone stealing, guessing or abusing account access.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Alert: DCSync by a non-DC account</title>
+      <html><p><b>Severity 6.</b> A normal account asked the DC for password replication data: every hash may be dumped. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=7&amp;nameddest=dcsync-by-a-non-dc-account" target="_blank">Playbook steps (page 7)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4662 ("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2" OR "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2" OR "89e95b76-444d-4c62-991a-0facbeda640c") | eval user=mvindex(Account_Name,0) | search NOT user="*$$" | table _time host user Object_Name Properties</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Account added to an admin group</title>
+      <html><p><b>Severity 5.</b> An account was added to Domain Admins, Administrators or another powerful group. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=8&amp;nameddest=account-added-to-an-admin-group" target="_blank">Playbook steps (page 8)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode IN (4728,4732,4756) | eval group=mvindex(Group_Name,0), changed_by=mvindex(Account_Name,0), member=mvindex(Account_Name,1), member_sid=mvindex(Security_ID,1) | search group IN ("Domain Admins","Enterprise Admins","Schema Admins","Administrators","Backup Operators","Account Operators","Server Operators","DnsAdmins","Group Policy Creator Owners","Remote Desktop Users","Remote Management Users") | table _time host group changed_by member member_sid</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Account locked out</title>
+      <html><p><b>Severity 5.</b> An account hit the lockout limit. A locked scoring account takes its service down. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=8&amp;nameddest=account-locked-out" target="_blank">Playbook steps (page 8)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4740 | eval locked_account=mvindex(Account_Name,-1) | table _time host locked_account Caller_Computer_Name</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: New Windows account created</title>
+      <html><p><b>Severity 4.</b> Someone created a Windows account, possibly a backdoor. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=8&amp;nameddest=new-windows-account-created" target="_blank">Playbook steps (page 8)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4720 | eval created_by=mvindex(Account_Name,0), new_account=mvindex(Account_Name,1) | table _time host created_by new_account</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Password spraying</title>
+      <html><p><b>Severity 4.</b> One source failed 20+ logons or tried 5+ usernames in 5 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=9&amp;nameddest=password-spraying" target="_blank">Playbook steps (page 9)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4625 | eval user=mvindex(Account_Name,-1) | stats count dc(user) as users values(user) as tried by host Source_Network_Address | where users&gt;=5 OR count&gt;=20 | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Kerberoasting</title>
+      <html><p><b>Severity 4.</b> A Kerberos service ticket was requested with weak RC4 encryption, to crack offline. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=9&amp;nameddest=kerberoasting" target="_blank">Playbook steps (page 9)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4769 Ticket_Encryption_Type=0x17 NOT Service_Name="krbtgt" NOT Service_Name="*$$" | table _time host Account_Name Service_Name Client_Address</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Remote logons (network and RDP)</title>
+      <html><p>Learn which account and IP the scoring engine uses. Everything else deserves a look.</p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4624 Logon_Type IN (3,10) | eval user=mvindex(Account_Name,-1), type=if(Logon_Type=10,"RDP","network") | search NOT user="*$$" NOT user="ANONYMOUS LOGON" | stats count latest(_time) as last by host user type Source_Network_Address | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed logons</title>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4625 | eval user=mvindex(Account_Name,-1) | stats count latest(_time) as last by host user Source_Network_Address Failure_Reason | sort - count | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Account changes</title>
+      <table>
+        <search>
+          <query>`windows_security` EventCode IN (4720,4722,4723,4724,4725,4726,4738,4781) | eval changed_by=mvindex(Account_Name,0), target=mvindex(Account_Name,1), change=case(EventCode=4720,"created",EventCode=4722,"enabled",EventCode=4723,"changed own password",EventCode=4724,"password reset",EventCode=4725,"disabled",EventCode=4726,"deleted",EventCode=4738,"changed",EventCode=4781,"renamed") | table _time host change target changed_by</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Explicit credential use (runas and attack tools)</title>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4648 | eval user=mvindex(Account_Name,0), used_account=mvindex(Account_Name,1) | search NOT user="*$$" | table _time host user used_account Target_Server_Name Process_Name</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>WinRM logins (scored on the DC)</title>
+      <table>
+        <search>
+          <query>`windows_winrm` EventCode=169 | rex "User (?&lt;user&gt;\S+) authenticated" | stats count latest(_time) as last by host user | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

@@ -1,0 +1,143 @@
+<form version="1.1" theme="dark" refresh="300">
+  <label>Overview</label>
+  <description>What needs attention right now. Refreshes every 5 minutes.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-60m</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Alerts fired</title>
+      <single>
+        <search>
+          <query>`splunk_audit` action=alert_fired | stats count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="underLabel">alerts in range</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Hosts quiet</title>
+      <single>
+        <search>
+          <query>| `expected_hosts` | join type=left host [| tstats max(_time) as last where index=* by host | eval host=lower(host)] | eval minutes_quiet=if(isnull(last), "never seen", round((now()-last)/60)) | where isnull(last) OR last &lt; relative_time(now(), "-10m") | table host minutes_quiet | stats count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="underLabel">hosts not sending logs</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Failed logons</title>
+      <single>
+        <search>
+          <query>(`windows_security` EventCode=4625) OR (`linux_auth` "Failed password") | stats count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="underLabel">Windows and SSH failures</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alerts fired</title>
+      <html><p>Work each one with the <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=1" target="_blank">playbook quick reference</a>. Full list: Activity, Triggered Alerts.</p></html>
+      <table>
+        <search>
+          <query>`splunk_audit` action=alert_fired | stats count latest(_time) as last by ss_name severity | sort -severity -last | convert ctime(last) | rename ss_name as alert</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Host stopped sending logs</title>
+      <html><p><b>Severity 5.</b> A host on the expected_hosts list sent nothing for 10 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=18&amp;nameddest=host-stopped-sending-logs" target="_blank">Playbook steps (page 18)</a></p></html>
+      <table>
+        <search>
+          <query>| `expected_hosts` | join type=left host [| tstats max(_time) as last where index=* by host | eval host=lower(host)] | eval minutes_quiet=if(isnull(last), "never seen", round((now()-last)/60)) | where isnull(last) OR last &lt; relative_time(now(), "-10m") | table host minutes_quiet</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Scored services: Windows services stopped</title>
+      <html><p>DNS, WinRM, SQL, RDP and file sharing are scored. A stop here can turn the scoreboard red.</p></html>
+      <table>
+        <search>
+          <query>`windows_system` EventCode=7036 "stopped state" ("SQL Server" OR "Windows Remote Management" OR "DNS Server" OR "Remote Desktop Services" OR "The Server service" OR "World Wide Web" OR "Active Directory" OR "Kerberos" OR "Netlogon") | table _time host Message</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Scored services: Linux services stopped or failed</title>
+      <table>
+        <search>
+          <query>`linux_syslog` ("Stopped" OR "Failed with result" OR "Main process exited") (httpd OR nginx OR apache2 OR postfix OR dovecot OR vsftpd OR sshd OR ssh OR mariadb OR mysqld OR mysql OR php-fpm OR Splunkd OR SplunkForwarder) | table _time host _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Website server errors (status 500+)</title>
+      <chart>
+        <search>
+          <query>`web_access` status&gt;=500 | timechart span=5m count by host</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Alert: Account locked out</title>
+      <html><p><b>Severity 5.</b> An account hit the lockout limit. A locked scoring account takes its service down. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=8&amp;nameddest=account-locked-out" target="_blank">Playbook steps (page 8)</a></p></html>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4740 | eval locked_account=mvindex(Account_Name,-1) | table _time host locked_account Caller_Computer_Name</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed logons by host</title>
+      <chart>
+        <search>
+          <query>(`windows_security` EventCode=4625) OR (`linux_auth` "Failed password") | timechart span=5m count by host</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+</form>

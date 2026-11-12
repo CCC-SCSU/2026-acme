@@ -1,0 +1,93 @@
+<form version="1.1" theme="dark">
+  <label>Network</label>
+  <description>The Palo Alto and the VyOS router. Needs both sending syslog to Splunk.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Alert: Firewall or router config changed</title>
+      <html><p><b>Severity 5.</b> A config change was committed on the Palo Alto or the VyOS router. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=17&amp;nameddest=firewall-or-router-config-changed" target="_blank">Playbook steps (page 17)</a></p></html>
+      <table>
+        <search>
+          <query>`paloalto_config` OR (`paloalto_system` "commit") OR (`vyos` ("Successful change to active configuration" OR "commit")) | table _time host sourcetype admin cmd configuration_path result _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Firewall threat detected</title>
+      <html><p><b>Severity 4.</b> The Palo Alto matched a high or critical threat signature. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=17&amp;nameddest=firewall-threat-detected" target="_blank">Playbook steps (page 17)</a></p></html>
+      <table>
+        <search>
+          <query>`paloalto_threat` severity IN ("critical","high") | table _time src_ip dest_ip dest_port app threat_name severity action</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Blocked inbound, by destination port</title>
+      <table>
+        <search>
+          <query>`paloalto_traffic` action IN ("blocked","deny","drop","reset-both","reset-client","reset-server") | stats count by dest_port dest_ip | sort - count | head 20</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Most repeated allowed connections</title>
+      <html><p>An internal server talking to the same outside IP over and over is a beacon.</p></html>
+      <table>
+        <search>
+          <query>`paloalto_traffic` action="allowed" | stats count dc(dest_port) as ports latest(app) as app by src_ip dest_ip | where count&gt;=20 | sort - count | head 30</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Palo Alto admin logins</title>
+      <table>
+        <search>
+          <query>`paloalto_system` ("logged in" OR "auth-success" OR "auth-fail" OR "failed authentication") | table _time host description _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>VyOS logins</title>
+      <table>
+        <search>
+          <query>`vyos` ("Accepted" OR "Failed password" OR "session opened") | table _time host _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>
