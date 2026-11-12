@@ -1,0 +1,4 @@
+<nav search_view="search">
+  <view name="remote_exec" default="true" />
+  <view name="search" />
+</nav>

@@ -1,0 +1,82 @@
+<form version="1.1" theme="dark">
+  <label>Remote Execution Hunt</label>
+  <description>smbexec, wmiexec, atexec and WinRM activity. Any row in the first four panels deserves a look.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default>
+        <earliest>-4h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>smbexec: new services that run cmd, .bat or PowerShell (System 7045)</title>
+      <table>
+        <search>
+          <query>`windows_system` EventCode=7045 (Service_File_Name="*COMSPEC*" OR Service_File_Name="*cmd*" OR Service_File_Name="*.bat*" OR Service_File_Name="*powershell*") | table _time host Service_Name Service_File_Name Service_Account</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>smbexec: cmd or PowerShell started by services.exe (Sysmon 1)</title>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=1 ParentImage="*services.exe" Image IN ("*cmd.exe","*powershell.exe","*pwsh.exe") | table _time host User ParentImage Image CommandLine</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Other remote exec: shells under WMI, WinRM or Task Scheduler (Sysmon 1)</title>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=1 (ParentImage="*WmiPrvSE.exe" OR ParentImage="*wsmprovhost.exe" OR ParentImage="*taskeng.exe" OR ParentCommandLine="*-s Schedule*") Image IN ("*cmd.exe","*powershell.exe","*pwsh.exe","*wscript.exe","*cscript.exe","*mshta.exe","*rundll32.exe") | table _time host User ParentImage Image CommandLine</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Batch files written to Windows\Temp (Sysmon 11)</title>
+      <table>
+        <search>
+          <query>`windows_sysmon` EventCode=11 TargetFilename="*Windows*Temp*.bat" | table _time host User Image TargetFilename</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Who is logging in over the network, and from where (Security 4624, type 3)</title>
+      <table>
+        <search>
+          <query>`windows_security` EventCode=4624 Logon_Type=3 | eval user=mvindex(Account_Name,-1) | search NOT user="*$$" | stats count latest(_time) as last_seen by host user Source_Network_Address | convert ctime(last_seen) | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+</form>
