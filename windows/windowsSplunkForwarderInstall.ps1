@@ -54,15 +54,36 @@ $inputsConfPath = "$INSTALL_DIR\etc\system\local\inputs.conf"
 Write-Host "Configuring inputs.conf for monitoring..."
 
 @"
-[WinEventLog://Microsoft-Windows-Sysmon/Operational]
-disabled = 0
-index = sysmon
-renderXml = true
-
 [WinEventLog://Security]
 disabled = 0
-index = security
 renderXml = false
+# Optional noise filter. List only event IDs you've confirmed are noise. Never filter 4624/4625/4688/4720/4728/4732/4740/4769.
+# blacklist3 = EventCode="^(4689|4703|4656|4658|4690|5156|5158|4627)$"
+
+[WinEventLog://System]
+disabled = 0
+renderXml = false
+
+[WinEventLog://Application]
+disabled = 0
+renderXml = false
+
+[WinEventLog://Microsoft-Windows-PowerShell/Operational]
+disabled = 0
+renderXml = false
+
+[WinEventLog://Microsoft-Windows-WinRM/Operational]
+disabled = 0
+renderXml = false
+
+[WinEventLog://Microsoft-Windows-Windows Defender/Operational]
+disabled = 0
+renderXml = false
+
+# Sysmon is sent as XML; install the Splunk Add-on for Sysmon on the Splunk server.
+[WinEventLog://Microsoft-Windows-Sysmon/Operational]
+disabled = 0
+renderXml = true
 "@ | Out-File -FilePath $inputsConfPath -Encoding ASCII -Append
 
 # Configure server.conf to use the specified hostname
