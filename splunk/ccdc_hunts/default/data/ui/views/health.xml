@@ -1,0 +1,177 @@
+<form version="1.1" theme="dark">
+  <label>Health &amp; Splunk</label>
+  <description>Can you still see everything, and is Splunk itself (a scored service) safe?</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-24h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Expected hosts</title>
+      <html><p>Edit the list in Settings, Advanced search, Search macros, expected_hosts.</p></html>
+      <table>
+        <search>
+          <query>| `expected_hosts` | join type=left host [| tstats max(_time) as last where index=* by host | eval host=lower(host)] | eval status=case(isnull(last),"NEVER SEEN", last&lt;relative_time(now(),"-10m"),"QUIET", true(),"OK"), last_seen=if(isnull(last),"-",strftime(last,"%m-%d %H:%M:%S")) | table host status last_seen | sort status</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Host stopped sending logs</title>
+      <html><p><b>Severity 5.</b> A host on the expected_hosts list sent nothing for 10 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=18&amp;nameddest=host-stopped-sending-logs" target="_blank">Playbook steps (page 18)</a></p></html>
+      <table>
+        <search>
+          <query>| `expected_hosts` | join type=left host [| tstats max(_time) as last where index=* by host | eval host=lower(host)] | eval minutes_quiet=if(isnull(last), "never seen", round((now()-last)/60)) | where isnull(last) OR last &lt; relative_time(now(), "-10m") | table host minutes_quiet</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Last data per host and log</title>
+      <table>
+        <search>
+          <query>| tstats count max(_time) as last where index=* by host sourcetype | eval last=strftime(last,"%m-%d %H:%M:%S") | sort host sourcetype</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Forwarders connected</title>
+      <table>
+        <search>
+          <query>index=_internal sourcetype=splunkd group=tcpin_connections | stats latest(_time) as last by hostname sourceIp | eval last=strftime(last,"%m-%d %H:%M:%S")</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>License usage today (MB)</title>
+      <html><p>The trial license allows 500 MB a day.</p></html>
+      <table>
+        <search>
+          <query>index=_internal source=*license_usage.log type=Usage earliest=@d | stats sum(b) as bytes by h st | eval MB=round(bytes/1024/1024,1) | fields - bytes | rename h as host, st as sourcetype | sort - MB</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Splunk login failures</title>
+      <html><p><b>Severity 4.</b> Someone failed to log into Splunk. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=18&amp;nameddest=splunk-login-failures" target="_blank">Playbook steps (page 18)</a></p></html>
+      <table>
+        <search>
+          <query>`splunk_audit` action="login attempt" info=failed | stats count latest(_time) as last by user src | convert ctime(last) | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Splunk logins</title>
+      <table>
+        <search>
+          <query>`splunk_audit` action="login attempt" | stats count latest(_time) as last by user info src | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Searches by user (find the scoring account)</title>
+      <html><p>The Splunk Query check logs in and searches for specific data. Never delete, rename or filter out what it looks for.</p></html>
+      <table>
+        <search>
+          <query>`splunk_audit` action=search info=granted user!="splunk-system-user" | stats count latest(_time) as last by user | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Latest search by each user</title>
+      <table>
+        <search>
+          <query>`splunk_audit` action=search info=granted user!="splunk-system-user" search=* | dedup user search | table _time user search | head 30</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Splunk config changes</title>
+      <table>
+        <search>
+          <query>`splunk_audit` (action=edit* OR action=create* OR action=delete* OR action=install* OR action=update*) | table _time user action info object | head 50</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Splunk users and roles</title>
+      <html><p>A new admin you didn't create is the red team.</p></html>
+      <table>
+        <search>
+          <query>| rest /services/authentication/users splunk_server=local | table title roles realname</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Installed apps</title>
+      <html><p>A Splunk app can run commands on this box. Disable any you didn't install.</p></html>
+      <table>
+        <search>
+          <query>| rest /services/apps/local splunk_server=local | table title label version disabled</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

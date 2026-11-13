@@ -1,0 +1,162 @@
+<form version="1.1" theme="dark">
+  <label>Web, Email &amp; FTP</label>
+  <description>The scored apps being attacked or broken.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Website status codes</title>
+      <html><p>A jump in 500s means the scored page is probably broken.</p></html>
+      <chart>
+        <search>
+          <query>`web_access` | timechart span=5m count by status</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Website returning server errors</title>
+      <html><p><b>Severity 5.</b> The website returned 10+ server errors in 5 minutes. The scored page may be broken. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=15&amp;nameddest=website-returning-server-errors" target="_blank">Playbook steps (page 15)</a></p></html>
+      <table>
+        <search>
+          <query>`web_access` status&gt;=500 | stats count as errors values(uri_path) as pages by host | where errors&gt;=10</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Web attack patterns</title>
+      <html><p><b>Severity 4.</b> Requests that look like traversal, injection or a scanning tool. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=16&amp;nameddest=web-attack-patterns" target="_blank">Playbook steps (page 16)</a> &#183; <a href="/en-US/app/ccdc_hunts/search?q=search%20%60web_access%60%20clientip%3D%22%2A%22%20status%3D200%20%7C%20table%20_time%20method%20uri%20status%20bytes&amp;earliest=$t.earliest|u$&amp;latest=$t.latest|u$" target="_blank">Run the scope search</a></p></html>
+      <table>
+        <search>
+          <query>`web_access` | regex _raw="(?i)(\.\./|%2e%2e|/etc/passwd|cmd=|exec=|union(\s|%20|\+)+select|&lt;script|%3cscript|sqlmap|nikto|gobuster|wpscan|feroxbuster|ffuf|nuclei|dirbuster)" | stats count values(uri) as sample_requests values(status) as statuses latest(useragent) as useragent by host clientip | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Possible web shells (POSTs to .php in upload-type folders)</title>
+      <table>
+        <search>
+          <query>`web_access` method=POST uri_path="*.php*" (uri_path="*upload*" OR uri_path="*images*" OR uri_path="*tmp*" OR uri_path="*cache*" OR uri_path="*files*" OR uri_path="*media*") | stats count latest(_time) as last by host clientip uri_path status | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Top web clients</title>
+      <table>
+        <search>
+          <query>`web_access` | stats count dc(uri) as pages latest(useragent) as useragent by clientip | sort - count | head 20</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Mail logins (IMAP and POP3)</title>
+      <table>
+        <search>
+          <query>`mail` "Login:" "user=&lt;" | rex "user=&lt;(?&lt;user&gt;[^&gt;]*)&gt;" | rex "rip=(?&lt;src&gt;[^,]+)" | stats count latest(_time) as last by host user src | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Mail login failures</title>
+      <html><p><b>Severity 3.</b> One IP failed 10+ mail logins in 5 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=16&amp;nameddest=mail-login-failures" target="_blank">Playbook steps (page 16)</a></p></html>
+      <table>
+        <search>
+          <query>`mail` ("authentication failed" OR "auth failed" OR "Authentication failure" OR "password mismatch") | rex "rip=(?&lt;rip&gt;[0-9a-fA-F\.:]+)" | rex "\[(?&lt;bracket_ip&gt;\d+\.\d+\.\d+\.\d+)\]" | eval src=coalesce(rip, bracket_ip) | stats count by host src | where count&gt;=10 | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Mail relay rejects</title>
+      <table>
+        <search>
+          <query>`mail` ("Relay access denied" OR "NOQUEUE: reject") | rex "from \S+\[(?&lt;src&gt;[^\]]+)\]" | stats count by host src | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Mail sent by sender</title>
+      <html><p>One sender spiking means the server may be relaying spam.</p></html>
+      <chart>
+        <search>
+          <query>`mail` "qmgr" "from=&lt;" | rex "from=&lt;(?&lt;sender&gt;[^&gt;]*)&gt;" | timechart span=10m count by sender limit=10</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>FTP activity</title>
+      <table>
+        <search>
+          <query>`ftp` ("OK LOGIN" OR "FAIL LOGIN" OR "OK UPLOAD" OR "OK DELETE" OR "OK MKDIR") | rex "\[(?&lt;user&gt;[^\]]+)\] (?&lt;action&gt;OK LOGIN|FAIL LOGIN|OK UPLOAD|OK DELETE|OK MKDIR)" | rex "Client \"(::ffff:)?(?&lt;src&gt;[^\"]+)\"" | table _time host user action src _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: FTP login failures</title>
+      <html><p><b>Severity 3.</b> One IP failed 10+ FTP logins in 5 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=17&amp;nameddest=ftp-login-failures" target="_blank">Playbook steps (page 17)</a></p></html>
+      <table>
+        <search>
+          <query>`ftp` "FAIL LOGIN" | rex "Client \"(::ffff:)?(?&lt;src&gt;[^\"]+)\"" | stats count by host src | where count&gt;=10 | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>

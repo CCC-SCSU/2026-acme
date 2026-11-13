@@ -1,0 +1,123 @@
+<form version="1.1" theme="dark">
+  <label>Linux</label>
+  <description>Logins, admin changes and persistence on Rocky, Ubuntu and Debian.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="t">
+      <label>Time range</label>
+      <default><earliest>-4h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>SSH logins</title>
+      <html><p>Learn which account and IP the scored SSH check uses.</p></html>
+      <table>
+        <search>
+          <query>`linux_auth` "Accepted" | rex "Accepted (?&lt;method&gt;\S+) for (?&lt;user&gt;\S+) from (?&lt;src&gt;\S+)" | stats count latest(_time) as last by host user src method | sort - last | convert ctime(last)</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: Root logged in over SSH</title>
+      <html><p><b>Severity 5.</b> Someone logged in as root over SSH. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=14&amp;nameddest=root-logged-in-over-ssh" target="_blank">Playbook steps (page 14)</a></p></html>
+      <table>
+        <search>
+          <query>`linux_auth` "Accepted" "for root" | rex "Accepted (?&lt;method&gt;\S+) for (?&lt;user&gt;\S+) from (?&lt;src&gt;\S+)" | table _time host user src method</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Linux user or group changed</title>
+      <html><p><b>Severity 5.</b> A Linux account or group was created, deleted or given new members. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=14&amp;nameddest=linux-user-or-group-changed" target="_blank">Playbook steps (page 14)</a></p></html>
+      <table>
+        <search>
+          <query>`linux_auth` ("new user" OR "new group" OR "delete user" OR "to group" OR "added by") | rex "(?&lt;program&gt;useradd|groupadd|usermod|userdel|gpasswd|groupmod|adduser)" | table _time host program _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Alert: SSH brute force</title>
+      <html><p><b>Severity 4.</b> One IP failed 10+ SSH logins in 5 minutes. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=15&amp;nameddest=ssh-brute-force" target="_blank">Playbook steps (page 15)</a></p></html>
+      <table>
+        <search>
+          <query>`linux_auth` "Failed password" | rex "Failed password for (invalid user )?(?&lt;user&gt;\S+) from (?&lt;src&gt;\S+)" | stats count dc(user) as users values(user) as tried by host src | where count&gt;=10 | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Alert: Crontab edited</title>
+      <html><p><b>Severity 4.</b> Someone edited a user's crontab. <a href="/en-US/static/app/ccdc_hunts/playbook.pdf#page=15&amp;nameddest=crontab-edited" target="_blank">Playbook steps (page 15)</a></p></html>
+      <table>
+        <search>
+          <query>`linux_syslog` crontab ("REPLACE" OR "BEGIN EDIT") | table _time host _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Failed SSH logins by source</title>
+      <table>
+        <search>
+          <query>`linux_auth` "Failed password" | rex "Failed password for (invalid user )?(?&lt;user&gt;\S+) from (?&lt;src&gt;\S+)" | stats count values(user) as tried by host src | sort - count</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>sudo commands</title>
+      <table>
+        <search>
+          <query>`linux_auth` "COMMAND=" | rex "sudo(\[\d+\])?:\s+(?&lt;user&gt;\S+)\s*:.*COMMAND=(?&lt;command&gt;.*)$$" | table _time host user command</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Services stopped or failed</title>
+      <table>
+        <search>
+          <query>`linux_syslog` ("Stopped" OR "Failed with result" OR "Main process exited") (httpd OR nginx OR apache2 OR postfix OR dovecot OR vsftpd OR sshd OR ssh OR mariadb OR mysqld OR mysql OR php-fpm OR Splunkd OR SplunkForwarder) | table _time host _raw</query>
+          <earliest>$t.earliest$</earliest>
+          <latest>$t.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>
