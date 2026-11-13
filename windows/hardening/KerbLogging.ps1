@@ -1,4 +1,5 @@
-﻿#Enables logging of Event IDs 4768 (TGT requests) and 4769 (TGS requests).
+﻿#todo need to make sure all logging is enabled for everything that is forwarded to Splunk, and Splunk expects. See splunk\
+#Enables logging of Event IDs 4768 (TGT requests) and 4769 (TGS requests).
 auditpol /set /category:"Account Logon" /subcategory:"Kerberos Service Ticket Operations" /success:enable /failure:enable
 auditpol /set /category:"Account Logon" /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
 
