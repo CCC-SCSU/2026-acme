@@ -7,7 +7,7 @@
 & "./adminlockout.ps1"
 & "./firewall.ps1"
 & "./preauth.ps1"
-& "./llmnr.ps1"
+& "./setGroupPolicy.ps1"
 & "./netbios.ps1"
 & "./services.ps1"
 & "./sysminstall.ps1"

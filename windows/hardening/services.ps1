@@ -18,14 +18,15 @@ Write-Host "Disabling naughty services..." -ForeGroundColor Red
 Stop-Service -Name "RasAuto" -Force
 Set-Service -Name "RasAuto" -StartupType Disabled
 
+#Below is RDP stuff I commented out as RDP is scored 2026 mwccdci
 #RD Configuration AND RD Services
 #AKA, this is the actual RDP service
-Stop-Service -Name "TermService" -Force
-Set-Service -Name "TermService" -StartupType Disabled
+#Stop-Service -Name "TermService" -Force
+#Set-Service -Name "TermService" -StartupType Disabled
 
 #Remote Desktop Services UserMode Port Redirector
-Stop-Service -Name "UmRdpService" -Force
-Set-Service -Name "UmRdpService" -StartupType Disabled
+#Stop-Service -Name "UmRdpService" -Force
+#Set-Service -Name "UmRdpService" -StartupType Disabled
 
 #Remote Procedure Call (RPC)
 #This isn't just required for domain controller functionality, this is required for WINDOWS functionality.
@@ -37,9 +38,10 @@ Set-Service -Name "UmRdpService" -StartupType Disabled
 #Stop-Service -Name "RpcLocator"
 #Set-Service -Name "RpcLocator" -StartupType Disabled
 
+#This could break interlinked hidden services idk gonna comment it out for 2026 mwccdci as well
 #Routing and Remote Access
-Stop-Service -Name "RemoteAccess" -Force
-Set-Service -Name "RemoteAccess" -StartupType Disabled
+#Stop-Service -Name "RemoteAccess" -Force
+#Set-Service -Name "RemoteAccess" -StartupType Disabled
 
 #Definitely an attack vector, but needed for a domain controller.
 #Stop-Service -Name "WinMgmt"
