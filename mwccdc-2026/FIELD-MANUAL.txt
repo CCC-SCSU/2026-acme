@@ -1,0 +1,720 @@
+================================================================================
+                      CCDC LINUX FIELD MANUAL
+      2026 Midwest Invitational CCDC  --  Saturday 14 November 2026
+      PRINT THIS. Rule 5 of Competition Play explicitly permits printed
+      reference materials in the competition area.
+================================================================================
+ CONTENTS
+   1. THE CLOCK -- ONLY 4 HOURS OF SCORING
+   2. YOUR BOXES
+   3. GETTING THE KIT ONTO A BOX
+   4. RUNNING IT -- THE THREE COMMANDS
+   5. WHAT THE GUIDED RUN ASKS YOU
+   6. THE FIVE RULES THAT CHANGE WHAT YOU DO
+   7. COMPLETE COMMAND REFERENCE
+   8. WHAT TO CHECK ALL DAY (THE LOOP)
+   9. SPLUNK -- EVERY BOX FEEDS IT
+  10. INCIDENT REPORTS -- 20% OF THE SCORE
+  11. INJECTS -- 40% OF THE SCORE
+  12. GENERAL ADVICE
+  13. WHEN SOMETHING BREAKS
+  14. THINGS THAT COST POINTS
+  15. FILES THIS KIT CREATES / CLEANUP
+
+ KEY LINKS
+   Injects / NISE Team Portal ......... https://injects.ccdc.events
+   Service status + PASSWORD CHANGES .. https://quotient.ccdc.events  (PCR tab)
+   Cyber Stadium (NETLAB+) ............ ccdc.cit.morainevalley.edu
+   Palo Alto web UI ................... https://172.20.240.200  admin/Changeme123
+ SCORE SPLIT: 40% service uptime | 40% injects | 20% incident response
+================================================================================
+
+
+================================================================================
+ 1.  THE CLOCK -- ONLY 4 HOURS OF SCORING
+================================================================================
+  Morning section:    8:00am drop flag, scoring 8:00am-12:00pm CST
+  Afternoon section:  1:00pm drop flag, scoring 1:00pm-5:00pm CST
+  (Check which section you are in. All times CST. NISE runs on Central time.)
+
+  Four hours is not long. You do not have time to be thorough everywhere. The
+  order below is what actually protects the score.
+
+  0:00-0:10   Everyone logs into NISE FIRST (injects.ccdc.event), answers the
+              "Welcome" inject. Claim boxes on the whiteboard, one owner each.
+  0:10-0:15   FIRST, on your box, read-only -- confirms the box matches your practice:
+                  sudo bash probe.sh | head -60
+                  sudo bash splunk.sh check
+              If the Splunk paths or service name differ from your test VM, you
+              find out now, before changing anything.
+  0:15-0:25   On every box: sudo bash <os>/run.sh r     (recon, changes nothing)
+              Read the RED FLAGS block. Verify the backup exists.
+  0:25-0:45   PASSWORDS on every box. Then submit them through Quotient PCR.
+              Default is sysadmin / Changeme1! on all five Linux boxes and
+              vyos/vyos on the router. Red team has this packet too.
+  0:45-1:30   Guided hardening run per box. Watchdog started on each.
+              The run now includes a Splunk forwarding check on every box.
+              On 172.20.240.20 run 'splunk.sh indexer' and confirm every box
+              appears. A box missing there is not logging.
+  1:30-4:00   The loop (section 8). Injects. Incident reports.
+
+  Someone owns injects FULL TIME from minute zero. They are 40% of the score and
+  they start arriving immediately.
+  Someone watches Quotient and the scoreboard FULL TIME. Not also a box owner.
+
+
+================================================================================
+ 2.  YOUR BOXES
+================================================================================
+ Internal 172.20.240.x behind the Palo Alto. Public = 172.25.(20+team#).x
+ Example: team 7 -> public pool 172.25.27.0/24, Ecom public = 172.25.27.10
+
+  IP               NAME            OS                 SCORED            FOLDER
+  172.20.240.10    Rocky Ecom      Rocky Linux 9      HTTP HTTPS SSH    rocky/
+  172.20.240.15    Ubuntu Email    Ubuntu 22.04       SMTP POP3 IMAP    ubuntu/
+  172.20.240.20    Debian Splunk   Debian 12          Splunk 8000/8089  debian/
+  172.20.240.100   2022 AD         Win Server 2022    DNS WinRM         (Windows)
+  172.20.240.120   2019 MSSQL      Win Server 2019    MSSQL SMB RDP     (Windows)
+  dhcp             Ubuntu Wkst     Ubuntu             workstation       ubuntu/
+  dhcp             Windows 11 Wks  Windows 11         workstation       (Windows)
+  172.17.0.2       Kali            Kali               workstation       kali/
+  172.20.240.200   Palo Alto       PAN-OS 11.0.2      FIREWALL UI       -- web UI
+  172.16.0.254     VyOS Router     VyOS 1.4.0         ROUTER            vyos/
+
+  ALL LINUX BOXES:  sysadmin / Changeme1!      VyOS: vyos / vyos
+  Palo Alto:        admin / Changeme123        Change every one of these.
+
+  SCORED SERVICES (from the team pack): HTTP, HTTPS, SMTP, POP3/IMAP/Webmail,
+  FTP, DNS, SSH, Ping, Splunk Query, Splunk Management, MSSQL SMB, MSSQL RDP,
+  MSSQL, AD-WinRM.  "Other scored services may be present and is the
+  responsibility of team discovery." -- so DISCOVER, do not assume.
+
+  The pack does not say which box serves FTP or DNS. DNS is probably the AD box.
+  FTP could be anywhere. Find out with 'firewall.sh suggest' before you firewall.
+
+
+================================================================================
+ 3.  GETTING THE KIT ONTO A BOX
+================================================================================
+  You reach these boxes through the NETLAB+ browser console, not SSH from home.
+  Once you have a shell on one Linux box you can move the kit internally.
+
+  Easiest: serve it from the Ubuntu workstation inside the pod.
+      On Ubuntu Wkst, in the folder holding mwccdc-2026.tgz:
+          python3 -m http.server 8000
+      On each server:
+          curl -O http://<wkst-ip>:8000/mwccdc-2026.tgz && tar xzf mwccdc-2026.tgz && cd mwccdc-2026
+
+  Or push it:   scp mwccdc-2026.tgz sysadmin@172.20.240.10:
+
+  INTERNET RULE (Internet Usage rule 4): you may NOT use an external, private
+  staging area or FTP site. Anything you pull from the internet must be freely
+  available to every other team. A PUBLIC GitHub repo is fine. Your own VPS or a
+  private repo is not. Serving the kit from a VM inside your own pod is internal,
+  not an external staging area, so that is the safe route.
+
+
+================================================================================
+ 4.  RUNNING IT -- THE THREE COMMANDS
+================================================================================
+      sudo bash rocky/run.sh d      DRY RUN. Prints its plan. Changes NOTHING.
+      sudo bash rocky/run.sh r      RECON. Inventory + backup + red flags.
+      sudo bash rocky/run.sh        FULL guided run. Asks before every change.
+
+  Swap "rocky" for ubuntu or debian. Each prints that box's traps first.
+  Kali: see kali/RUN.txt.   VyOS: see vyos/RUN.txt, and do NOT run the kit there.
+  Every script also answers:  bash <script> --help
+  Typing shortcut:  sudo bash ro<TAB>/run.sh d
+
+
+================================================================================
+ 5.  WHAT THE GUIDED RUN ASKS YOU
+================================================================================
+Enter takes the default. [Y/n] = yes by default. [y/N] = no by default.
+Everything that can break a scored service defaults to NO -- including password
+rotation. Nothing you reach by holding Enter will lock out the scoring engine.
+
+  "Continue to hardening?"        Y, after reading the red flags.
+
+  "Accounts to SKIP when rotating"
+        Service accounts you are not ready to submit yet. If you leave this
+        empty it asks a second time before touching anything.
+
+  "Create a new sudo admin?"      Your call. Rule 11 forbids CHANGING usernames;
+                                  adding an admin account is not changing one,
+                                  but if you want to be strictly safe, say N and
+                                  just change the sysadmin password instead.
+
+  "Rotate passwords now?"         Defaults to NO. Say Y only when you are ready
+                                  to write them down AND submit them to Quotient
+                                  this minute.
+
+   -> New passwords appear ONCE. WRITE THEM ON PAPER, then submit them at
+      https://quotient.ccdc.events  PCR tab, CSV format:
+          username,password
+          sysadmin,NewPassHere
+      Quotient password changes are DYNAMIC -- applied immediately, no scoring
+      manager needed. There is no excuse for not submitting them.
+
+  "Apply package updates?"        N unless you have time to test afterward.
+                                  Remember: NO SNAPSHOTS. A bad update is forever.
+
+  "Harden Apache / sshd?"         Y. Both test their config and undo themselves
+                                  if it fails.
+
+  (no SSH allow-list prompt)      Removed. AllowUsers is deny-by-default and
+                                  silently breaks the scoring engine's SSH login.
+
+  (no source-IP restriction)      Removed. Rule 9 requires public services
+                                  reachable from ALL source IPs and penalises
+                                  filtering. Do not add one by hand either.
+
+  "Allowed inbound TCP ports"     Pre-filled with what is listening right now.
+                                  Delete anything that is not a scored service.
+                                  Keep SSH. Keep ICMP (it is handled for you).
+
+  "Keep these rules?"             Test from a SECOND window first. No answer
+                                  means it reverts in 5 minutes.
+
+  "Start the service watchdog?"   Y. This is what protects the 40% uptime score.
+
+
+================================================================================
+ 6.  THE FIVE RULES THAT CHANGE WHAT YOU DO
+================================================================================
+ These are from the 2026 MWCCDC team pack. They are not general advice.
+
+ 1. NO SOURCE-IP FILTERING ON PUBLIC SERVICES.  (Systems rule 9)
+    "Teams must maintain 'public' services as generally available from all source
+    IP addresses. Attempts to restrict or filter by IP source address may
+    adversely affect scoring directly, and may also incur a penalty when
+    detected. Teams are prohibited from configuring any sort of knife edge
+    access, attempting to allow only scoring engine traffic."
+    -> You MAY block a specific IP that is actively attacking you. You may NOT
+       allow-list the scoring engine. The kit refuses to do this now.
+
+ 2. NO SNAPSHOTS, NO SCRUBS, NO REVERTS.  (Systems rule 10)
+    "Teams will not have the ability to scrub or revert to snapshot a VM during
+    the invitational. Tech Support will not support any snapshot/scrub."
+    -> Every change is permanent. Back up before you touch anything. This is why
+       the firewall auto-reverts and sshd restores itself: those are your only
+       undo. You can request a whole new lab reservation, but service scores up
+       to that point are retained -- it is not a free reset.
+
+ 3. MAINTAIN ICMP.  (Competition Play rule 12)
+    "Blue Team members should maintain ICMP on all competition devices and
+    systems, including the router, unless directed otherwise."
+    -> Ping is a scored service. The kit always allows echo-request. Do not
+       block it anywhere, including on the VyOS router and the Palo Alto.
+
+ 4. YOU MAY NOT CHANGE USERNAMES.  (Competition Play rule 11)
+    "Blue Team members may not change usernames within their respective
+    environment... may change passwords for administrator and user level
+    accounts."
+    -> Rename nothing. Passwords only. Deleting or disabling an account is a
+       grey area -- if in doubt, disable rather than delete, and note it in an
+       incident report.
+
+ 5. NO SYSTEM NAME OR IP CHANGES.  (Systems rules 6 and 7)
+    "Teams are not permitted to alter the system names or IP address of their
+    assigned systems unless directed by an inject; this may affect the results
+    of the scoring mechanism." Services must stay on their assigned public IP.
+    -> No hostname changes, no re-addressing, no moving a service to another VM.
+
+
+================================================================================
+ 7.  COMPLETE COMMAND REFERENCE
+================================================================================
+--- MASTER -------------------------------------------------------------------
+  sudo bash ccdc.sh                    full guided run
+  sudo bash ccdc.sh --recon            recon only, no changes
+  sudo bash ccdc.sh --dry-run          print the plan, change nothing
+  sudo bash go d | r | (none)          short form
+
+--- SERVICES (protects the 40% uptime score) ---------------------------------
+  sudo bash services.sh discover       build the watch list from live ports
+  sudo bash services.sh check          check everything once
+  sudo bash services.sh watch [sec]    loop; RESTARTS what dies (default 30)
+  sudo bash services.sh monitor [sec]  same loop, alert only, never restarts
+  sudo bash services.sh status         restart counts + last 25 log lines
+  sudo bash services.sh add tcp 80 httpd.service
+  sudo bash services.sh add http http://127.0.0.1/ httpd.service
+  sudo bash services.sh add udp 53 named.service
+  sudo bash services.sh add unit - postfix.service
+  sudo pkill -f 'services.sh watch'    stop it
+     Watch list: /etc/ccdc/services.conf    Log: /root/ccdc-logs/services.log
+     Settings:   CFG=<file>  MAX_RESTARTS=3  WINDOW=900
+
+--- FIREWALL -----------------------------------------------------------------
+  sudo bash firewall.sh suggest        what is listening (no changes)
+  sudo ALLOW_TCP="22 80 443" ALLOW_UDP="53" bash firewall.sh
+  sudo bash firewall.sh save           survive a reboot
+  sudo bash firewall.sh undo           remove this kit's rules now
+     ALLOW_TCP / ALLOW_UDP   ports to allow inbound (SSH added automatically)
+     ROLLBACK_SECS=300       seconds before it undoes itself
+     DRY=1                   print only
+     FORWARD=ACCEPT          do not block forwarded traffic (iptables)
+     KEEP_V6=1               do not touch IPv6 at all
+     MGMT=...                REFUSED by default -- rule 9. Only with
+                             ALLOW_SOURCE_FILTER=1, and only to block an
+                             attacker, never to allow-list the scoring engine.
+  ICMP echo-request is always allowed (Ping is scored). Picks firewalld >
+  iptables > nftables automatically.
+
+--- USERS AND PASSWORDS ------------------------------------------------------
+  sudo bash users.sh audit             risky accounts, sudo, SSH keys
+  sudo bash users.sh newadmin teamadmin
+  sudo SKIP="svc1" bash users.sh rotate
+  sudo bash users.sh reveal            show new passwords ONCE, then shred
+  sudo bash users.sh lock bob          lock account, kill its sessions
+  sudo bash users.sh lock root         lock root PASSWORD only (sudo still works)
+  sudo bash users.sh keys              move every authorized_keys aside
+     PWLEN=14   password length        SKIP="a b"  accounts to leave alone
+     File: /root/.newcreds (root only, shredded by 'reveal')
+     >> Submit every change at https://quotient.ccdc.events PCR tab, CSV:
+        username,password          (quotes optional: "user","pass")
+
+--- HARDENING ----------------------------------------------------------------
+  sudo bash harden.sh                  (the guided run calls it this way)
+     PERMIT_ROOT=no|yes  root SSH login (default no)
+     PASSAUTH=yes|no     only set if you mean to change it; left alone otherwise
+     NO_FWD=yes          disable TCP forwarding (breaks ssh -J)
+     LOCK_CRON=yes       only root may use cron/at
+     CRON_USERS="svc"    ...plus these
+     SSH_PORT=NNNN       DO NOT. SSH is scored on its normal port.
+     ALLOW_USERS="a b"   *** DO NOT USE. *** Deny-by-default; locks out the
+                         scoring engine. Guided run never sets it. Refuses
+                         non-interactively without I_KNOW_SSH_ISNT_SCORED=1.
+     Backups: /etc/ssh/sshd_config.bak.<timestamp>
+
+--- WEB SERVER (Rocky Ecom) --------------------------------------------------
+  sudo bash web-harden.sh              scan + back up docroot, NO changes
+  sudo bash web-harden.sh apply        also add hardening headers
+  sudo DOCROOT=/srv/www bash web-harden.sh apply
+     Backup: /opt/html.BAK.<timestamp>
+     The HTTP check compares page CONTENT. Look at the page after any change.
+
+--- MY BOX: DEBIAN SPLUNK (172.20.240.20) ------------------------------------
+  sudo bash debian-splunk.sh           ordered runbook for this box, step by step
+  sudo bash debian-splunk.sh list      print the sequence without doing anything
+
+--- HONEYPOT / TRIPWIRES -----------------------------------------------------
+  sudo bash honeypot.sh arm            tripwires on whoami/nc/socat/nmap/chattr...
+  sudo bash honeypot.sh watch          LIVE alerts in a pane, with the kill command
+  sudo bash honeypot.sh alerts [n]     recent hits
+  sudo bash honeypot.sh kill pts/3     kill that terminal (asks first)
+  sudo bash honeypot.sh kill 12345     kill that PID's whole session
+  sudo bash honeypot.sh bait           plant decoy credential files
+  sudo bash honeypot.sh baitcheck      has a decoy been read?
+  sudo bash honeypot.sh status         armed? PATH correct? any wrapper removed?
+  sudo bash honeypot.sh disarm         remove every tripwire
+     Nothing is ever killed automatically -- the scoring engine may run a command
+     over SSH, so YOU decide after reading the alert.
+     It is a TRIPWIRE, not a wall: /usr/bin/whoami by absolute path is not caught.
+     'id' and 'hostname' are excluded on purpose (this kit calls them constantly).
+
+--- BLOCK ROOT OVER SSH (without breaking the scored check) -------------------
+  sudo bash rootssh.sh check           READ ONLY: who actually logs in? has root?
+  sudo bash rootssh.sh disable         block root, after showing you the evidence
+  sudo bash rootssh.sh enable          undo immediately
+  sudo bash rootssh.sh status          current setting + backups
+     Per-ACCOUNT restriction, so rule 9 (no source-IP filtering) does not apply.
+     It reads the auth logs first because the pack never says which account the
+     scoring engine uses. If root has been logging in, it makes you confirm.
+
+--- END OF COMPETITION -------------------------------------------------------
+  sudo bash cleanup.sh status          what the kit left on this box
+  sudo bash cleanup.sh collect         bundle evidence -- DO THIS FIRST
+  sudo bash cleanup.sh stop            stop watchdogs, disarm tripwires
+  sudo bash cleanup.sh creds           shred the password file
+  sudo bash cleanup.sh all             collect, stop, then remove (asks each step)
+
+--- TEST-VM PROBE (run on your practice box, not in competition) -------------
+  sudo bash probe.sh                 dump every fact the kit keys on
+  sudo bash probe.sh > probe.txt     save it
+  Reports: firewall backend, whether the kit's nft ruleset parses here, sshd
+  unit name and settings, Splunk install paths, Splunk systemd unit name, the
+  ss output format, and runs splunk.sh check against this box.
+
+--- SPLUNK / LOG FORWARDING (run on EVERY box) -------------------------------
+  sudo bash splunk.sh check            READ ONLY: installed? running? sending where?
+  sudo bash splunk.sh indexer          ON the Splunk box: who is connected?
+  sudo bash splunk.sh fix              repair forwarding (asks before each change)
+  sudo bash splunk.sh watch            add Splunk to the watchdog
+     INDEXER=172.20.240.20   the Splunk box      RPORT=9997   receiving port
+  check/indexer need NO Splunk password. Flags any forward target that is not
+  your indexer -- that is red team stealing your logs and blinding you.
+
+--- FINDING RED TEAM ---------------------------------------------------------
+  sudo bash persistence.sh             hunt (last 120 min of changes)
+  sudo bash persistence.sh 480         ...looking back 8 hours
+  sudo bash inventory.sh               full inventory to a text file
+  sudo bash baseline.sh snap           record current state
+  sudo bash baseline.sh diff           what changed since snap
+  sudo bash baseline.sh watch [sec]    repeating, on screen
+  sudo bash baseline.sh log [sec]      repeating, to a file
+  sudo pkill -f 'baseline.sh log'      stop it
+     Alerts: /root/ccdc-logs/alerts.log       Baseline: /root/.baseline/
+
+--- PACKAGES -----------------------------------------------------------------
+  sudo bash pkgcheck.sh verify         files differing from their package
+  sudo bash pkgcheck.sh shells         who owns each shell; offers reinstall
+  sudo bash pkgcheck.sh extras         installed after the OS was built
+  sudo bash pkgcheck.sh unowned        executables belonging to no package
+
+--- BACKUP (matters more than usual -- there is no snapshot) ------------------
+  sudo bash backup.sh                  /etc, web roots, homes, /opt, databases
+  sudo MAX_MB=2000 bash backup.sh      include bigger directories
+     Output: /root/backup-<date>/  -- COPY IT OFF:
+             scp -r /root/backup-* sysadmin@<wkst>:
+
+--- VyOS ROUTER --------------------------------------------------------------
+  bash vyos-backup.sh                  read-only recon + config backup
+     See vyos/RUN.txt. Never run the rest of the kit on the router.
+
+--- TRUSTED TOOLS (tools/README.txt) -----------------------------------------
+  sudo sh tools/3-check.sh             binaries + package manager clean?
+  sudo sh tools/4-fixrepo.sh           repair a tampered package manager
+
+--- PLAN B, if the kit will not run (plan-b/PLAN-B.txt) ----------------------
+  sudo sh plan-b/1-look.sh             see the box          (read only)
+  sudo sh plan-b/5-hunt.sh             find red team        (read only)
+  sudo sh plan-b/2-pw.sh sysadmin      change one password
+  sudo sh plan-b/3-keep.sh 80 443 &    keep services up
+  sudo sh plan-b/4-wall.sh 22 80 443   firewall, self-undoing in 5 min
+  sudo sh plan-b/4-wall.sh keep        keep those rules
+  sudo sh plan-b/4-wall.sh undo        put the old rules back
+  sudo sh /root/UNDO-FIREWALL.sh       EMERGENCY, always works
+
+
+================================================================================
+ 8.  WHAT TO CHECK ALL DAY (THE LOOP)
+================================================================================
+Every 15 minutes, on each box you own. Two minutes each.
+
+  [ ] Quotient (quotient.ccdc.events). Is anything red? That is the only
+      opinion that counts.
+  [ ] sudo bash services.sh check          are my scored services up?
+  [ ] sudo bash baseline.sh diff           what changed since I hardened?
+  [ ] tail -20 /root/ccdc-logs/services.log   did anything restart itself?
+  [ ] sudo bash splunk.sh check            is this box still forwarding logs?
+
+  Every 30-45 minutes, or any time something feels wrong:
+  [ ] sudo bash persistence.sh             full hunt
+  [ ] sudo bash users.sh audit             new accounts? new SSH keys?
+  [ ] ss -tulpn                            new listening ports?
+  [ ] ps -ef | grep -E '/tmp|/dev/shm'     anything running from a temp dir?
+  [ ] last -20                             unexpected logins?
+  [ ] Splunk: index=* "Accepted password"  logins you did not make?
+  [ ] On the Splunk box: sudo bash splunk.sh indexer   is every box still sending?
+
+  THE FIVE QUESTIONS THAT CATCH MOST ATTACKS
+    1. Is there a UID 0 account that is not root?
+            awk -F: '$3==0{print $1}' /etc/passwd
+    2. Did an SSH key appear that I did not add?
+            find / -name authorized_keys -newer /etc/hostname 2>/dev/null
+    3. Is something listening that was not an hour ago?     ss -tulpn
+    4. Is a process running out of /tmp, /var/tmp or /dev/shm?
+            ps -ef | grep -E '/tmp|/dev/shm|/var/tmp' | grep -v grep
+    5. Did a system binary change?     sudo bash pkgcheck.sh verify
+    6. Is this box still forwarding to MY indexer, not someone else's?
+            sudo bash splunk.sh check
+
+  WHEN YOU FIND SOMETHING -- IN THIS ORDER
+    1. WRITE IT DOWN FIRST. What, where, timestamp, source IP. This is the
+       incident report, and incident response is 20% of your score. You will
+       not remember the details later.
+    2. Find how they got in. A webshell means the web app is the hole. A new
+       SSH key means credentials leaked. Removing the artifact without closing
+       the door means they are back in five minutes.
+    3. Then remove it. Re-check in 20 minutes. If it returns, you missed the
+       persistence, not the payload.
+
+
+================================================================================
+ 9.  SPLUNK -- EVERY BOX FEEDS IT
+================================================================================
+Splunk is not just the Debian box's problem. Every machine on the network must
+forward its logs to the indexer at 172.20.240.20:9997. Two scored checks and a
+fifth of your total score depend on that working.
+
+ WHY IT IS A SCORING ISSUE, NOT JUST A LOGGING ONE
+   * "Splunk Query" authenticates and searches for SPECIFIC CONTENT. If the
+     forwarders on your other boxes stop sending, that search can come back
+     empty -- so a dead forwarder on Rocky can fail the SPLUNK box's check.
+   * "Splunk Management" (8089) is its own scored check.
+   * Incident response is 20% of the score and needs source IPs and timelines.
+     No logs, no report, no points.
+
+ ON EVERY BOX -- do this during the first hardening pass
+     sudo bash splunk.sh check          READ ONLY. Changes nothing.
+   It reports: is the forwarder installed, is the service running, WHERE is it
+   sending, is the connection actually established, and what is being collected.
+   It needs no Splunk password -- it reads config files, systemctl and ss.
+
+     sudo bash splunk.sh fix            repair forwarding (asks before each change)
+     sudo bash splunk.sh watch          add Splunk to the services.sh watchdog
+
+ ON THE SPLUNK BOX (172.20.240.20)
+     sudo bash splunk.sh indexer        who is actually connected and sending?
+   If a box is missing from that list, it is not forwarding. Go run 'check' on it.
+   Then confirm inside Splunk itself:
+       | metadata type=hosts | eval last=strftime(lastTime,"%H:%M:%S")
+         | table host last totalCount
+   Every box you own should appear, with a recent timestamp.
+
+ *** CHECK BOOT-START FIRST (found on the practice VM, 13 Nov) ***
+   Splunk can be running happily with NO systemd unit and NO init script. It looks
+   fine until something reboots the box -- then it stays down, Splunk Query and
+   Splunk Management both fail, and every forwarder has nowhere to send logs.
+   The watchdog cannot restart it either, because services.sh uses systemctl.
+       sudo bash splunk.sh check          look at the "managed by:" line
+       sudo bash splunk.sh fix            offers to register it with systemd
+   By hand (Splunk REFUSES to register boot-start while running, so stop first --
+   about 1-2 min of downtime, cheaper than losing it to a reboot):
+       ps -o user= -p $(pgrep -x splunkd | head -1)    # run it back as THAT user
+       sudo /opt/splunk/bin/splunk stop
+       sudo /opt/splunk/bin/splunk enable boot-start -systemd-managed 1 -user <thatuser>
+       sudo systemctl daemon-reload
+       sudo systemctl enable --now Splunkd
+       systemctl is-active Splunkd
+       sudo bash splunk.sh watch
+   If the unit never appears, start Splunk again immediately so you are not down:
+       sudo /opt/splunk/bin/splunk start
+
+ *** SPLUNK 10 COLD-START RACE (seen on the practice box, 13 Nov) ***
+   On a cold start -- including after a reboot -- splunkd can come up while the web
+   tier stays DOWN. Port 8089 and 9997 look fine, but 8000 never opens, and 8000 is
+   the SCORED Splunk Query check. The splunkd log shows:
+       WebuiStartup ... Connection refused ... 127.0.0.1:8065
+   8065 is Splunk 10's Python web backend; the UI starts before it is ready.
+   THE FIX IS SIMPLY A SECOND RESTART:
+       sudo systemctl restart Splunkd      (then give it ~2 minutes)
+       ss -tlnp | grep -E ':8000|:8065'    both should be listening
+   This is why the watchdog matters here: with Splunk registered as a systemd unit,
+   services.sh sees 8000 missing and restarts Splunkd, which resolves the race by
+   itself. Make sure it is watching:
+       sudo bash splunk.sh watch
+   ALWAYS CHECK 8000 AFTER ANY REBOOT OR RESTART. Do not trust "active" alone --
+   systemd reports the unit, not whether the scored port is actually open.
+
+ *** THE ATTACK TO WATCH FOR ***
+   Red team edits outputs.conf and re-points your forwarder at THEIR box. That
+   does two things at once: they get a copy of your logs, and you go blind. It
+   is quiet and easy to miss. 'splunk.sh check' flags any forward target that is
+   not your indexer, and the guided run surfaces it in the RED FLAGS block.
+   Config lives at:
+       /opt/splunkforwarder/etc/system/local/outputs.conf     (forwarders)
+       /opt/splunk/etc/system/local/outputs.conf              (indexer)
+   Also watch inputs.conf -- deleting the monitors leaves the forwarder running
+   while collecting nothing, which looks healthy and is not.
+
+ PORTS -- DO NOT PRUNE THESE
+   On the Splunk box:  9997 (forwarders in), 8000 (query check), 8089 (SCORED
+                       management check), possibly 514/udp (syslog).
+   On every other box: leave OUTBOUND open. The kit never blocks outbound, but
+                       if you hand-write rules, remember forwarders dial OUT.
+
+ IF A FORWARDER WILL NOT START
+     systemctl status SplunkForwarder    (unit may be Splunkd or splunk)
+     /opt/splunkforwarder/bin/splunk status
+     tail -40 /opt/splunkforwarder/var/log/splunk/splunkd.log
+   Restarting Splunk is slow -- give it a couple of minutes before deciding it
+   failed.
+
+ SEARCHES WORTH KNOWING (for incident reports)
+     index=* "Failed password"                    SSH brute force
+     index=* "Accepted password"                  logins -- any you did not make?
+     index=* sudo                                 privilege escalation
+     index=* sourcetype=linux_secure | stats count by host
+     | metadata type=hosts                        who is reporting in at all
+
+
+================================================================================
+ 10.  INCIDENT REPORTS -- 20% OF THE SCORE
+================================================================================
+This is the most under-used points pool in CCDC, and this year it is a full
+fifth of the total. The pack says reports are scored on "clarity, thoroughness
+and accuracy" and must contain:
+
+  [ ] A description of what occurred
+  [ ] Timelines of activity
+  [ ] Source AND destination IP addresses
+  [ ] Any passwords cracked
+  [ ] A discussion of what was affected
+  [ ] A remediation plan
+
+  Submit them through the White Team. They can generally be filed as needed
+  throughout the competition.
+
+  WARNING from the pack: the White Team "may also, at their discretion, assess
+  NEGATIVE scores for frivolous, unnecessary, or excessive communication."
+  So do not file a report for every failed SSH login. File real incidents,
+  written properly.
+
+  Keep a running scratch file from minute one:
+      echo "$(date '+%H:%M') found X on box Y from IP Z" >> ~/incidents.txt
+  Splunk (172.20.240.20) is where you get IPs and timelines. Use it.
+
+
+================================================================================
+ 11.  INJECTS -- 40% OF THE SCORE
+================================================================================
+  [ ] One person owns injects FULL TIME from minute zero. Not "whoever is free."
+  [ ] Portal: https://injects.ccdc.events   (log in FIRST, before anything else)
+  [ ] Answer the "Welcome" inject immediately -- it signals you are ready.
+  [ ] *** RESPONSES MUST BE AN ATTACHED PDF FILE. *** Any exception will be
+      stated in the inject itself. Judges will reject responses that do not
+      conform to the stated requirements.
+  [ ] NISE runs on CENTRAL time. Do not submit in the last minute of validity --
+      the pack explicitly warns that last-minute submissions get rejected.
+  [ ] While an inject is still open, both you and the judges can mark a
+      submission invalid so you can resubmit. There is a resubmission limit.
+  [ ] Nextcloud is provided for drafting responses and has an online office
+      suite. Use it rather than fighting with a VM text editor.
+  [ ] Read the inject twice before writing, once more before submitting.
+      Answer exactly what is asked -- rubrics reward that.
+
+
+================================================================================
+ 12.  GENERAL ADVICE
+================================================================================
+SCORING BEATS SECURITY.
+  A hardened box that fails its check scores zero. A slightly soft box that
+  answers every check scores full marks. When in doubt, keep the service up.
+
+THERE IS NO UNDO THIS YEAR.
+  No snapshots, no scrubs, no reverts. Back up before you touch anything, and
+  copy backups off the box. The firewall's 5-minute auto-revert and sshd's
+  self-restore are the only safety nets you have. Use the dry run.
+
+A LISTENING PORT IS NOT A WORKING SERVICE.
+  HTTP/HTTPS checks compare page CONTENT. Mail checks send and receive real
+  mail. Splunk checks authenticate and run a query. After any change, test the
+  service the way the scoring engine would, not just 'systemctl status'.
+
+MAIL DEPENDS ON THE WINDOWS TEAM.
+  POP3/IMAP authenticate against Active Directory usernames. Coordinate before
+  anyone rotates AD passwords, or mail scoring dies for reasons the Linux owner
+  cannot see.
+
+SPLUNK IS A WHOLE-NETWORK SERVICE, NOT ONE BOX.
+  Every machine forwards to 172.20.240.20:9997. Run 'splunk.sh check' on every
+  box during hardening and again in the loop. A dead forwarder on Rocky can fail
+  the SPLUNK box's scored query check, and it costs you the evidence behind the
+  20% incident-response score. Port 9997 inbound on the Splunk box, outbound
+  open everywhere else.
+
+KEEP A SECOND SESSION OPEN. ALWAYS.
+  Before touching sshd or the firewall, open a second session and leave it idle.
+  Your NETLAB+ console is the backstop -- know how to reach it.
+
+CHANGE ONE THING AT A TIME, THEN TEST.
+  Three changes at once and you cannot tell which broke scoring.
+
+WRITE IT ON PAPER.
+  Passwords, what you changed, what you found and when. Printed materials are
+  permitted. The pack also warns competition officials are not responsible for
+  the security of credentials you put on the competition network.
+
+ONE OWNER PER BOX. Two people editing one config is self-inflicted downtime.
+
+BUDGET FOR FOUR HOURS, NOT EIGHT.
+  Rough split: 40% uptime and monitoring, 40% injects, 20% hunting and reports.
+  You will not finish hardening everything. Protect what is scored first.
+
+
+================================================================================
+ 13.  WHEN SOMETHING BREAKS
+================================================================================
+ LOCKED OUT BY THE FIREWALL
+     Wait 5 minutes -- it reverts itself.
+     From the NETLAB+ console:   sudo sh /root/UNDO-FIREWALL.sh
+     Or:                         sudo bash firewall.sh undo
+
+ SSH BROKE AFTER HARDENING
+     The kit restores sshd_config automatically if the config fails its test.
+     Still locked out? NETLAB+ console, then:
+         ls /etc/ssh/sshd_config.bak.*
+         cp /etc/ssh/sshd_config.bak.<newest> /etc/ssh/sshd_config
+         systemctl restart sshd   (or ssh)
+
+ A SERVICE WILL NOT START
+     systemctl status <name> ; journalctl -u <name> -n 50
+     On Rocky, check SELinux FIRST:
+         getenforce ; ausearch -m avc -ts recent ; restorecon -Rv <path>
+     Never 'setenforce 0' to make it go away.
+
+ WEB PAGE LOADS BUT SCORES ZERO
+     The check compares content. Compare the live page against the docroot
+     backup at /opt/html.BAK.*  -- red team may have altered the page.
+
+ MAIL AUTH FAILING
+     Ask the Windows team what changed in AD. POP3/IMAP use AD usernames.
+
+ SPLUNK DOWN
+     systemctl status Splunkd ; /opt/splunk/bin/splunk status
+     /opt/splunk/bin/splunk restart      (slow, give it 2 minutes)
+
+ SERVICE KEEPS DYING AFTER RESTART
+     That is someone killing it, not a crash:
+         sudo bash persistence.sh ; systemctl list-timers --all
+         crontab -l ; cat /etc/cron.d/*
+
+ LOST THE NEW PASSWORDS
+     Shredded on purpose. Use the NETLAB+ console and set them again with
+     plan-b/2-pw.sh, then resubmit via Quotient PCR.
+
+ VM COMPLETELY LOCKED UP
+     You can power cycle it from the NETLAB+ VE console. You CANNOT scrub or
+     revert it. A new lab reservation is possible but scores up to that point
+     are retained -- it is not a clean restart.
+
+ COMMON MISTAKES
+     "Permission denied"  -> you forgot sudo
+     "No such file"       -> wrong directory; cd into ccdc/ first
+     Script will not run  -> use  bash script.sh  or  sh script.sh
+
+
+================================================================================
+ 14.  THINGS THAT COST POINTS
+================================================================================
+  * Filtering a public service by source IP, or allow-listing the scoring
+    engine. Rule 9: may incur a penalty when detected, and knife-edge access is
+    prohibited outright.
+  * Blocking ICMP anywhere. Ping is scored and rule 12 says maintain it.
+  * Changing a username. Rule 11 forbids it. Passwords only.
+  * Changing a system name or IP, or moving a service to another VM.
+  * Changing a password and not submitting it via Quotient PCR.
+  * Breaking Splunk forwarding, or missing that red team re-pointed a forwarder
+    at their own box. You lose the logs AND hand them a copy.
+  * Running the kit on the VyOS router or the Palo Alto.
+  * Any offensive activity against another team, White Team or Red Team --
+    IMMEDIATE DISQUALIFICATION. Scanning your own systems is fine. Nothing else.
+  * Using a private external staging area for tools. Must be freely available
+    to all teams.
+  * Installing non-free software. Free or open source only, no trials.
+  * Filing frivolous or excessive incident reports -- can score NEGATIVE.
+  * Identifying your school to the White Team. Use your team NUMBER.
+
+
+================================================================================
+ 15.  FILES THIS KIT CREATES / CLEANUP
+================================================================================
+  /root/ccdc-logs/<date>/       logs from each guided run
+  /root/ccdc-logs/services.log  watchdog log
+  /root/ccdc-logs/alerts.log    baseline change log
+  /root/backup-<date>/          backups -- COPY OFF THE BOX
+  /root/.newcreds               new passwords (root only; shredded by reveal)
+  /root/.baseline/              baseline snapshot
+  /root/UNDO-FIREWALL.sh        plan-b firewall escape hatch
+  /root/iptables-before-*.rules firewall backups
+  /etc/ccdc/services.conf       watchdog watch list
+  /etc/sysctl.d/99-ccdc.conf    sysctl settings from harden.sh
+  /etc/ssh/sshd_config.bak.*    sshd backups
+  /opt/html.BAK.*               web root backups
+
+  END OF SECTION:
+      sudo shred -u /root/.newcreds 2>/dev/null
+      sudo rm -rf /root/ccdc-logs /root/backup-* /root/.baseline
+================================================================================

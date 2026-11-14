@@ -1,0 +1,59 @@
+================================================================
+ PLAN B -- use these if the main kit (mwccdc-2026/go) will not run.
+ Each file is standalone. Plain /bin/sh, so they also work on
+ busybox too. Nothing here depends on anything else.
+ Run them in order. Steps 1 and 5 change NOTHING.
+================================================================
+
+1. SEE WHAT IS ON THE BOX          (read only, safe, do this first)
+     sudo sh plan-b/1-look.sh
+   Saves /root/look-<host>-<time>.txt. Copy it off the box.
+
+2. HUNT FOR RED TEAM               (read only, safe)
+     sudo sh plan-b/5-hunt.sh
+   Look for: UID 0 accounts other than root, empty passwords,
+   NOPASSWD sudo, SSH keys you did not add, cron jobs, anything
+   running out of /tmp or /dev/shm.
+
+3. CHANGE PASSWORDS                (one account at a time)
+     sudo sh plan-b/2-pw.sh                 list accounts
+     sudo sh plan-b/2-pw.sh bob             new random password for bob
+     sudo sh plan-b/2-pw.sh bob MyPass123   set one you choose
+   It shows the password once. WRITE IT ON PAPER.
+   >> Submit every change to https://quotient.ccdc.events <<
+
+4. KEEP SERVICES UP                (this is what protects your score)
+     sudo sh plan-b/3-keep.sh check 80 443        check once
+     sudo sh plan-b/3-keep.sh 80 443 3306 &       watch + auto-restart
+     sudo sh plan-b/3-keep.sh 80=nginx 3306=mysql if it cannot
+                                                  work out the name
+   Log: /root/keep.log      Stop: sudo pkill -f 3-keep.sh
+   Max 3 restarts per port per 15 min, then it waits for a human.
+
+5. FIREWALL                        (do this LAST, after you know the ports)
+     sudo sh plan-b/4-wall.sh 22 80 443      apply (UDP: u53)
+       -> TEST EVERYTHING from a second window
+     sudo sh plan-b/4-wall.sh keep           keep them
+     sudo sh plan-b/4-wall.sh undo           put the old rules back
+   It undoes ITSELF after 5 minutes unless you run "keep".
+   Port 22 is always added so you cannot lock out your own SSH.
+   Emergency escape hatch, always present: sudo sh /root/UNDO-FIREWALL.sh
+
+----------------------------------------------------------------
+IF SOMETHING GOES WRONG
+  Firewall locked me out .... wait 5 min, it undoes itself.
+                              Or from console: sh /root/UNDO-FIREWALL.sh
+  Service will not start ..... cat /root/keep.log
+                              systemctl status <name>
+                              journalctl -u <name> -n 50
+  Lost a password ............ you have console access via Proxmox.
+  Script will not run ........ use  sh <script>  not ./<script>
+  "Permission denied" ........ you forgot sudo
+
+WHAT THESE DO NOT DO
+  No package updates, no reboots, no bootloader or kernel changes,
+  no mass password changes, nothing written outside /root, /etc and /tmp.
+
+NEVER run any of this on the VyOS router (172.16.0.254) or the Palo Alto
+(172.20.240.200). See vyos/RUN.txt. There are NO snapshots or scrubs this
+year -- if you break the router there is no revert.

@@ -1,0 +1,237 @@
+================================================================================
+ COMPLETE COMMAND REFERENCE -- every script, every mode, every setting
+ Nothing in this kit does anything that is not listed on this page.
+ Every script also accepts:  --help
+================================================================================
+
+NORMAL USE -- you only need these
+--------------------------------------------------------------------------------
+  sudo bash debian/run.sh d     dry run   (also: arch/ rocky/ ubuntu/)
+  sudo bash debian/run.sh r     recon
+  sudo bash debian/run.sh       full guided run
+  sudo bash go d | r | (none)   same thing, without the per-OS notes
+
+Everything below is for running one piece by hand.
+
+================================================================================
+MASTER
+================================================================================
+  bash ccdc.sh --help           show options
+  sudo bash ccdc.sh             full guided run
+  sudo bash ccdc.sh --recon     recon only, no changes
+  sudo bash ccdc.sh --dry-run   print the plan, change nothing
+
+================================================================================
+SERVICES -- keeping your score up
+================================================================================
+  sudo bash services.sh discover        build the watch list from live ports
+  sudo bash services.sh check           check everything once, then exit
+  sudo bash services.sh watch [sec]     loop; RESTARTS what dies   (default 30s)
+  sudo bash services.sh monitor [sec]   same loop but NEVER restarts, alert only
+  sudo bash services.sh status          restart counts + last 25 log lines
+  sudo bash services.sh add tcp 80 apache2.service     add one check by hand
+  sudo bash services.sh add http https://127.0.0.1/ apache2.service
+  sudo bash services.sh add udp 53 named.service
+  sudo bash services.sh add unit - mariadb.service     just check the unit is up
+  sudo pkill -f 'services.sh watch'     stop the watchdog
+
+  Watch list : /etc/ccdc/services.conf     lines are:  TYPE TARGET UNIT
+  Log        : /root/ccdc-logs/services.log
+  Settings   : CFG=<file>          use a different watch list
+               MAX_RESTARTS=3      restarts allowed per unit per window
+               WINDOW=900          that window, in seconds
+  Example    : sudo MAX_RESTARTS=5 WINDOW=600 bash services.sh watch 20
+
+================================================================================
+FIREWALL
+================================================================================
+  sudo bash firewall.sh suggest                   what is listening (no changes)
+  sudo ALLOW_TCP="22 80 443" ALLOW_UDP="53" bash firewall.sh
+  sudo bash firewall.sh save                      make the rules survive a reboot
+  sudo bash firewall.sh undo                      remove this kit's rules now
+
+  Settings   : ALLOW_TCP="22 80"   inbound TCP to allow (SSH added automatically)
+               ALLOW_UDP="53"      inbound UDP to allow
+               PRESET=ecom|mail|splunk|wks   2026 MWCCDC port sets; VERIFY with
+                                   'firewall.sh suggest' -- other scored services
+                                   may exist and finding them is your job
+               MGMT=<cidr>         REFUSED by default. MWCCDC rule 9: public
+                                   services must be reachable from ALL source
+                                   IPs; filtering may incur a penalty and
+                                   knife-edge scoring-engine access is
+                                   prohibited. Only with ALLOW_SOURCE_FILTER=1,
+                                   and only to block an active attacker.
+               SSH_PORT=22         which port is SSH
+               ROLLBACK_SECS=300   seconds before it undoes itself
+               DRY=1               print what it would do, change nothing
+               FORWARD=ACCEPT      do not block forwarded traffic (iptables)
+               FORWARD_DROP=1      DO block forwarded traffic (nftables). Leave
+                                   this off on Docker/K8S boxes
+               KEEP_V6=1           do not touch IPv6 rules at all
+
+  It picks the backend itself: firewalld, else iptables, else nftables.
+  After applying you have ROLLBACK_SECS to confirm, or it reverts on its own.
+
+================================================================================
+USERS AND PASSWORDS
+================================================================================
+  sudo bash users.sh audit                 risky accounts, sudo, SSH keys
+  sudo bash users.sh newadmin teamadmin    make a sudo admin (do before locking root)
+  sudo SKIP="svc1 svc2" bash users.sh rotate    new password for everyone but SKIP
+  sudo bash users.sh reveal                show the new passwords ONCE, then shred
+  sudo bash users.sh lock bob              lock an account, kill its sessions
+  sudo bash users.sh lock root             lock root's PASSWORD only (sudo still works)
+  sudo bash users.sh keys                  move every authorized_keys aside
+
+  Settings   : PWLEN=14      password length
+               SKIP="a b"    accounts rotate must not touch
+  Passwords are written to /root/.newcreds (root only) and shredded by 'reveal'.
+  >> Submit every change at https://quotient.ccdc.events -- not a ticket. <<
+
+================================================================================
+HARDENING
+================================================================================
+  sudo bash harden.sh --help
+  sudo bash harden.sh
+
+  Settings   : ALLOW_USERS="a b"   SSH AllowUsers whitelist.
+                                   *** DO NOT USE WHERE SSH IS SCORED. ***
+                                   Deny-by-default: any account not listed, the
+                                   scoring engine's included, is refused by sshd
+                                   and the service check fails. The guided run
+                                   never sets this. Non-interactively it refuses
+                                   unless I_KNOW_SSH_ISNT_SCORED=1.
+               PERMIT_ROOT=no|yes  allow root to SSH in (default no)
+               PASSAUTH=yes|no     only set this if you mean to change it;
+                                   left alone by default
+               SSH_PORT=2222       change the SSH port. Open it in the firewall
+                                   FIRST. Skipped on Ubuntu using ssh.socket
+               NO_FWD=yes          also disable TCP forwarding (breaks ssh -J)
+               LOCK_CRON=yes       only root may use cron/at
+               CRON_USERS="svc"    ...plus these users
+               SSHD_CONFIG=<path>  test against a different config file
+               SYSCTL_DIR=<path>   write sysctl settings somewhere else
+
+  Always validates the config and puts the original back if anything fails.
+  Backups land at /etc/ssh/sshd_config.bak.<timestamp>
+
+================================================================================
+WEB SERVER
+================================================================================
+  sudo bash web-harden.sh                  scan + back up the web root, NO changes
+  sudo bash web-harden.sh apply            also add hardening headers (config-tested)
+  sudo DOCROOT=/srv/www bash web-harden.sh apply
+
+  Looks for webshells, PHP in upload dirs, world-writable files, .htaccess
+  tricks, and the files holding your DB password.
+  Web root backup: /opt/html.BAK.<timestamp>
+
+================================================================================
+SPLUNK / LOG FORWARDING  (run on EVERY box, not just the Splunk box)
+================================================================================
+  sudo bash splunk.sh check            READ ONLY: installed? running? sending where?
+  sudo bash splunk.sh indexer          ON the Splunk box: who is connected?
+  sudo bash splunk.sh fix              repair forwarding (asks before each change)
+  sudo bash splunk.sh watch            add Splunk to the services.sh watchdog
+
+  Settings : INDEXER=172.20.240.20   the Splunk box
+             RPORT=9997              receiving port
+             SPLUNK_USER=admin       only used by 'fix'
+  check and indexer need NO Splunk password -- they read config, systemctl, ss.
+
+  WHY: the scored "Splunk Query" check searches for specific CONTENT, so a dead
+  forwarder on another box can fail the SPLUNK box's check. Incident response is
+  20% of the score and runs on these logs.
+  It flags any forward target that is NOT your indexer: red team re-pointing
+  outputs.conf steals your logs and blinds you at the same time.
+
+================================================================================
+FINDING RED TEAM
+================================================================================
+  sudo bash persistence.sh            hunt (read only, last 120 min of changes)
+  sudo bash persistence.sh 480        ...looking back 8 hours instead
+  sudo bash inventory.sh              full host inventory to a text file
+  sudo bash baseline.sh snap          record the box's current state
+  sudo bash baseline.sh diff          what changed since snap
+  sudo bash baseline.sh watch [sec]   same, on screen, repeating (default 30s)
+  sudo bash baseline.sh log [sec]     same, appending to a file (default 120s)
+  sudo pkill -f 'baseline.sh log'     stop the background monitor
+
+  Alert log : /root/ccdc-logs/alerts.log
+  Baseline  : /root/.baseline/
+
+================================================================================
+PACKAGES
+================================================================================
+  sudo bash pkgcheck.sh verify        files that differ from their package
+  sudo bash pkgcheck.sh shells        who owns each shell; offers reinstall
+  sudo bash pkgcheck.sh extras        what was installed after the OS was built
+  sudo bash pkgcheck.sh unowned       executables belonging to no package
+
+  Works with dpkg, rpm and pacman. Asks before every reinstall or removal.
+  On Arch it asks twice, because 'pacman -S' is a partial upgrade.
+
+================================================================================
+BACKUP
+================================================================================
+  sudo bash backup.sh                 /etc, web roots, homes, /opt, databases
+  sudo MAX_MB=2000 bash backup.sh     include directories up to 2 GB
+
+  Settings   : MAX_MB=500          skip directories bigger than this
+               MIN_FREE_MB=1024    refuse to run below this much free space
+  Output     : /root/backup-<date>/   -- COPY IT OFF THE BOX:
+               scp -r /root/backup-* you@yourmachine:
+
+================================================================================
+TRUSTED TOOLS  (details: tools/README.txt)
+================================================================================
+  sudo sh tools/3-check.sh        are the binaries + package manager clean?
+  sudo sh tools/4-fixrepo.sh      repair a tampered package manager (asks first)
+  sh tools/1-fetch.sh             ON YOUR OWN MACHINE, before game day
+  sudo sh tools/2-install.sh      on the box; verifies hashes, installs to
+                                  /opt/ccdc-bin
+  export PATH=/opt/ccdc-bin:$PATH use them in this shell
+
+================================================================================
+PLAN B -- if the kit will not run  (details: plan-b/PLAN-B.txt)
+================================================================================
+  sudo sh plan-b/1-look.sh                 see the box          (read only)
+  sudo sh plan-b/5-hunt.sh                 find red team        (read only)
+  sudo sh plan-b/2-pw.sh                   list accounts
+  sudo sh plan-b/2-pw.sh bob               new random password for bob
+  sudo sh plan-b/2-pw.sh bob MyPass123     set a specific password
+  sudo sh plan-b/3-keep.sh check 80 443    check ports once
+  sudo sh plan-b/3-keep.sh 80 443 &        keep them up
+  sudo sh plan-b/3-keep.sh 80=nginx &      ...naming the unit yourself
+  sudo sh plan-b/4-wall.sh 22 80 443       firewall (UDP: u53)
+  sudo sh plan-b/4-wall.sh keep            keep those rules
+  sudo sh plan-b/4-wall.sh undo            put the old rules back
+  sudo sh plan-b/4-wall.sh show            print current rules
+  sudo sh /root/UNDO-FIREWALL.sh           emergency: always works
+
+  Settings   : 3-keep.sh  IV=30 MAXR=3 WIN=900   interval, max restarts, window
+               4-wall.sh  SECS=300              seconds before auto-undo
+
+================================================================================
+EVERY FILE THIS KIT CREATES
+================================================================================
+  /root/ccdc-logs/<date>/     logs from each guided run
+  /root/ccdc-logs/services.log  watchdog log
+  /root/ccdc-logs/alerts.log    baseline change log
+  /root/backup-<date>/        backups      (copy off the box)
+  /root/.newcreds             new passwords (root only; shredded by 'reveal')
+  /root/.baseline/            baseline snapshot
+  /root/UNDO-FIREWALL.sh      plan-b firewall escape hatch
+  /root/iptables-before-*.rules   firewall backups
+  /root/fw.log /root/wall.log /root/keep.log   firewall + keeper logs
+  /etc/ccdc/services.conf     watchdog watch list
+  /etc/sysctl.d/99-ccdc.conf  sysctl settings from harden.sh
+  /etc/ssh/sshd_config.bak.*  sshd backups
+  /opt/html.BAK.*             web root backups
+  /opt/ccdc-bin/              your own trusted binaries
+  /run/ccdc-fw.pid /run/ccdc-svc/   runtime state (gone on reboot)
+
+  Clean up at the end of the day:
+    sudo shred -u /root/.newcreds 2>/dev/null
+    sudo rm -rf /root/ccdc-logs /root/backup-* /root/.baseline
+================================================================================

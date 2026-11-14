@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Short entry point.  sudo bash mwccdc-2026/go      full guided run
+#                     sudo bash mwccdc-2026/go r    recon only (read-only)
+#                     sudo bash mwccdc-2026/go d    dry run (prints, changes nothing)
+d=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+case "$1" in
+  r|recon|--recon)      exec bash "$d/ccdc.sh" --recon;;
+  d|dry|--dry|--dry-run) exec bash "$d/ccdc.sh" --dry-run;;
+esac
+exec bash "$d/ccdc.sh" "$@"

@@ -1,0 +1,47 @@
+MWCCDC Linux kit  --  folder: mwccdc-2026
+Built:  2026-11-13 14:08 CST
+For:    2026 Midwest Invitational CCDC -- Saturday 14 November 2026
+My box: Debian Splunk, 172.20.240.20
+
+CHECK YOU HAVE THE RIGHT COPY:
+    cat mwccdc-2026/VERSION.txt
+If the build date above is not 2026-11-13, you have an older tarball. Delete it.
+
+SCRIPTS (30 total)
+  debian-splunk.sh   ordered runbook for MY box -- start here Saturday
+  probe.sh           read-only: does this box match what I tested at home?
+  honeypot.sh        tripwires + manual session kill
+  rootssh.sh         block root SSH after checking it is safe to
+  splunk.sh          forwarding health (systemd / init.d / CLI-managed)
+  cleanup.sh         evidence bundle, then teardown
+  ccdc.sh + go       the generic guided run
+  firewall harden users services baseline persistence pkgcheck
+  inventory backup web-harden vyos-backup
+  plan-b/            5 standalone /bin/sh fallbacks
+  tools/             package-manager + binary integrity
+
+DOCS
+  TODAY.txt          prep plan for Fri 13 Nov
+  FIELD-MANUAL.txt   everything -- PRINT THIS
+  COMMANDS.txt       every command and setting
+  START.txt          the short version
+  GUIDE.txt          the short guide -- START HERE
+  MY-BOX-debian-splunk/   your box: harden.sh watch.sh clean.sh README.txt
+  boxes/<machine>/   one folder per machine in the topology
+
+WHAT CHANGED TODAY (13 Nov)
+  + honeypot.sh, rootssh.sh, debian-splunk.sh, cleanup.sh (new)
+  + splunk.sh handles systemd, init.d, or no service manager
+  + persistence.sh SUID hunt now crosses filesystem boundaries
+  + probe.sh step 0: verify the real box matches your practice VM
+
+TESTED AGAINST A REAL SPLUNK 10.6 INSTALL (13 Nov, 21:48)
+  - firewall.sh suggest correctly proposes 8000 8089 9997 (loopback filtered)
+  - probe.sh now shows filtered AND unfiltered port lists separately
+  - FOUND: Splunk running with no systemd unit -> no boot-start -> dies on reboot.
+    splunk.sh check now flags it; splunk.sh fix offers to register it.
+  - CONFIRMED the whole boot-start procedure end to end on Splunk 10.6:
+    stop as the OWNING user (not root), enable as root, start via systemd.
+  - FOUND: after the systemd switch, port 8000 (SCORED) stayed down due to a
+    cold-start race with the 8065 web backend. A second restart fixes it, and
+    the watchdog now self-heals it. splunk.sh fix verifies all 3 ports.

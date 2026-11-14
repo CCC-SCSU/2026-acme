@@ -1,0 +1,113 @@
+================================================================================
+ PREP PLAN -- Friday 13 Nov, competition Saturday morning
+ You have: now until 3:00pm, then 8:30pm until sleep.
+================================================================================
+
+NOW UNTIL 3:00 -- GET THE VM PROVING THINGS (highest value first)
+--------------------------------------------------------------------------------
+ [ ] 0a. CONFIRMED ON THE PRACTICE VM (13 Nov): Splunk had NO systemd unit and no
+         init script -- it was running, but nothing would restart it after a reboot,
+         and red team CAN reboot your boxes. CHECK THIS ON THE REAL BOX FIRST:
+             sudo bash splunk.sh check        look for "managed by:"
+         If it says "managed by: NOTHING", fix it immediately:
+             sudo bash splunk.sh fix          offers to enable boot-start
+         or by hand -- NOTE Splunk refuses to do this while running, so stop first:
+             ps -o user= -p $(pgrep -x splunkd | head -1)    # who does it run as?
+             sudo /opt/splunk/bin/splunk stop
+             sudo /opt/splunk/bin/splunk enable boot-start -systemd-managed 1 -user <thatuser>
+             sudo systemctl daemon-reload
+             sudo systemctl enable --now Splunkd
+             systemctl is-active Splunkd                      # should say: active
+         Then add it to the watchdog:  sudo bash splunk.sh watch
+         THEN CHECK PORT 8000. Splunk 10 often comes up with the web tier down
+         (8089/9997 fine, 8000 missing). One more 'systemctl restart Splunkd'
+         fixes it. Confirmed on the practice box 13 Nov.
+
+ [ ] 0. SATURDAY, FIRST THING ON THE REAL BOX (30 seconds, read-only, changes nothing)
+          sudo bash probe.sh | head -60
+          sudo bash splunk.sh check
+        This is what closes the gap between your practice VM and the real box.
+        If anything differs from what you saw at home, you will see it HERE,
+        before you have changed a single thing. Both commands are read-only.
+
+ [ ] 1. Copy the kit to the Debian VM and run the probe (2 min)
+          scp mwccdc-2026.tgz sysadmin@<vm>:        (or re-download in the VM)
+          tar xzf mwccdc-2026.tgz && cd mwccdc-2026
+          sudo bash probe.sh > probe.txt
+        Send me probe.txt. It tells me the firewall backend, the sshd unit name
+        and the ss format on REAL Debian 12. Anything that disagrees with the
+        kit, I fix tonight.
+
+ [ ] 2. Install the Splunk Universal Forwarder (15 min)
+          https://www.splunk.com/en_us/download/universal-forwarder.html
+          sudo dpkg -i splunkforwarder-*.deb
+          sudo /opt/splunkforwarder/bin/splunk start --accept-license
+          sudo /opt/splunkforwarder/bin/splunk enable boot-start -systemd-managed 1
+        Then the two facts I actually need:
+          systemctl list-units --all | grep -i splunk
+          sudo bash splunk.sh check
+        If splunk.sh misreads anything, tell me the output.
+
+ [ ] 3. Test the two scripts that can lock you out (10 min)
+          sudo bash harden.sh                 then try a NEW ssh login
+          sudo bash rootssh.sh check          read the verdict
+          sudo bash rootssh.sh disable        then try: ssh root@<vm>  (refused)
+          sudo bash rootssh.sh enable         confirm it goes back
+        Also deliberately break it and confirm self-repair:
+          echo "GarbageDirective yes" | sudo tee -a /etc/ssh/sshd_config
+          sudo bash harden.sh                 should restore and refuse
+
+ [ ] 4. Arm the honeypot and trip it yourself (5 min)
+          sudo bash honeypot.sh arm
+          sudo bash honeypot.sh watch         (second terminal)
+          whoami                              (first terminal -- alert fires)
+          sudo bash honeypot.sh kill pts/N    practise the kill on a THIRD session
+          sudo bash honeypot.sh disarm
+        Confirm whoami still works normally afterwards.
+
+ [ ] 5. Firewall, with the rollback deliberately NOT confirmed (5 min)
+          sudo ALLOW_TCP="8000 8089 9997" ALLOW_UDP="514" ROLLBACK_SECS=60 bash firewall.sh
+          ...wait 60s without answering. Confirm the rules revert on their own.
+        That is the safety net you are relying on Saturday. Prove it works.
+
+8:30 UNTIL SLEEP -- WALK IT END TO END
+--------------------------------------------------------------------------------
+ [ ] 6. Full dry run, then the real thing, on the VM:
+          sudo bash debian-splunk.sh list     read the whole sequence
+          sudo bash debian-splunk.sh          actually walk it
+        Goal: you have seen every prompt once before it matters.
+
+ [ ] 7. Practise the 15-minute loop three times so it is muscle memory:
+          sudo bash services.sh check
+          sudo bash baseline.sh diff
+          sudo bash splunk.sh indexer
+          sudo bash honeypot.sh alerts
+
+ [ ] 8. Practise cleanup (it runs in a specific order for a reason):
+          sudo bash cleanup.sh status
+          sudo bash cleanup.sh collect        evidence FIRST
+          sudo bash cleanup.sh all
+
+ [ ] 9. PRINT: FIELD-MANUAL.txt and this file. Rule 5 permits printed material.
+
+ [ ] 10. Write on paper, before you sleep:
+          - your Quotient login and the PCR CSV format: username,password
+          - the NISE portal: injects.ccdc.events
+          - who on your team owns injects, and who watches the scoreboard
+          - your box: 172.20.240.20, sysadmin/Changeme1!
+
+SATURDAY MORNING -- FIRST 20 MINUTES ON YOUR BOX
+--------------------------------------------------------------------------------
+      cd mwccdc-2026
+      sudo bash debian-splunk.sh
+
+ That walks recon -> honeypot -> passwords -> Splunk -> SSH/root -> firewall ->
+ watchdog -> baseline, pausing at each step. Then run the loop every 15 min.
+
+ Two things only you can do for the whole team:
+   * You are the INDEXER. If forwarders die on other boxes, tell those owners.
+     sudo bash splunk.sh indexer   shows exactly who is missing.
+   * You hold the logs. Incident response is 20% of the score and it all comes
+     from your box. Keep notes as you go:
+       echo "$(date '+%H:%M') <finding, source IP>" >> /root/incidents.txt
+================================================================================

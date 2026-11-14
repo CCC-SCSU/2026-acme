@@ -1,0 +1,32 @@
+*** START HERE:  cat GUIDE.txt  ***   then print FIELD-MANUAL.txt
+
+2026 Midwest Invitational CCDC -- Saturday 14 November 2026
+Only 4 hours of scoring: 8am-12pm or 1pm-5pm CST.
+
+THREE COMMANDS, IN THIS ORDER, from your box's folder:
+    sudo bash harden.sh dry      see the plan, change nothing
+    sudo bash harden.sh          lock it down
+    sudo bash watch.sh           keep it alive
+    sudo bash clean.sh           at the end: evidence, then teardown
+
+YOUR BOX
+    cd MY-BOX-debian-splunk      Debian Splunk, 172.20.240.20
+
+EVERY OTHER MACHINE
+    boxes/rocky-ecom/  boxes/ubuntu-email/  boxes/ubuntu-wkst/  boxes/kali/
+    boxes/windows-ad/  boxes/windows-mssql/  boxes/windows-11-wkst/
+    boxes/palo-alto/   boxes/vyos-router/            (last five: notes, not scripts)
+
+BEFORE YOU CHANGE ANYTHING (30 seconds, read-only)
+    sudo bash probe.sh | head -60
+    sudo bash splunk.sh check
+
+THREE THINGS THAT COST POINTS
+ 1. Source-IP filtering on a public service (rule 9 -- penalty). The kit refuses.
+ 2. Blocking ICMP (rule 12 -- Ping is scored).
+ 3. Changing a password without submitting it at https://quotient.ccdc.events
+
+NO SNAPSHOTS EXIST THIS YEAR. Every change is permanent. Use 'harden.sh dry' first.
+
+DOCS:  GUIDE.txt  FIELD-MANUAL.txt  COMMANDS.txt  VERSION.txt
+       bash <script> --help    works on all of them

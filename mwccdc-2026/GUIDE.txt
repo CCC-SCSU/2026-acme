@@ -1,0 +1,143 @@
+================================================================================
+ MWCCDC 2026 LINUX KIT -- THE GUIDE
+ 2026 Midwest Invitational CCDC  --  Saturday 14 November 2026
+ Printed reference material is explicitly permitted (Competition Play rule 5).
+================================================================================
+
+ THE THREE COMMANDS. THAT IS THE WHOLE SYSTEM.
+--------------------------------------------------------------------------------
+ On any Linux box, go to that box's folder and run, in this order:
+
+     sudo bash harden.sh          1. lock it down   (asks before every change)
+     sudo bash watch.sh           2. keep it alive  (watchdog + monitoring)
+     sudo bash clean.sh           3. at the end     (evidence, then teardown)
+
+ Add 'dry' to see the plan without changing anything:
+     sudo bash harden.sh dry
+
+
+ WHICH FOLDER FOR WHICH MACHINE
+--------------------------------------------------------------------------------
+  MY-BOX-debian-splunk/     172.20.240.20   Debian 12 + Splunk   <- YOURS
+  boxes/rocky-ecom/         172.20.240.10   Rocky Linux 9        HTTP/HTTPS
+  boxes/ubuntu-email/       172.20.240.15   Ubuntu 22.04         SMTP/POP3/IMAP
+  boxes/ubuntu-wkst/        dhcp            Ubuntu               workstation
+  boxes/kali/               172.17.0.2      Kali                 workstation
+  boxes/windows-ad/         172.20.240.100  Server 2022          NOTES ONLY
+  boxes/windows-mssql/      172.20.240.120  Server 2019          NOTES ONLY
+  boxes/windows-11-wkst/    dhcp            Windows 11           NOTES ONLY
+  boxes/palo-alto/          172.20.240.200  PAN-OS 11.0.2        NOTES ONLY - web UI
+  boxes/vyos-router/        172.16.0.254    VyOS 1.4.0           NOTES ONLY - its own CLI
+
+  The Windows and network folders hold notes, not scripts. This kit is bash.
+  Public addresses are 172.25.(20+team#).x, NATed to 172.20.240.x.
+
+
+ GETTING THE KIT ONTO A BOX
+--------------------------------------------------------------------------------
+     git clone https://github.com/<you>/<repo>.git mwccdc-2026
+     cd mwccdc-2026
+
+  The repo MUST be public. Internet Usage rule 4 forbids pulling from a private
+  staging area during the competition.
+
+  No network on the box? Serve it from your workstation instead:
+     on the wkst:  python3 -m http.server 8000
+     on the box:   curl -O http://<wkst-ip>:8000/mwccdc-2026.tgz && tar xzf mwccdc-2026.tgz
+
+
+ SATURDAY MORNING, IN ORDER
+--------------------------------------------------------------------------------
+  0:00  Everyone logs into NISE (injects.ccdc.events) and answers "Welcome".
+        Claim boxes -- ONE owner each, written down.
+
+  0:05  On your box, read-only, changes nothing:
+            cd MY-BOX-debian-splunk          (or boxes/<yours>)
+            sudo bash ../probe.sh | head -60
+            sudo bash ../splunk.sh check
+        This confirms the box matches what you tested. CHECK PORT 8000.
+
+  0:10  sudo bash harden.sh dry              read the plan
+  0:15  sudo bash harden.sh                  run it
+  0:45  sudo bash watch.sh                   watchdog + baseline
+
+  then  the 15-minute loop, below, until the end.
+
+  end   sudo bash clean.sh                   evidence FIRST, then teardown
+
+
+ THE 15-MINUTE LOOP
+--------------------------------------------------------------------------------
+     sudo bash ../services.sh check       are my scored services up?
+     sudo bash ../baseline.sh diff        what changed since I hardened?
+     sudo bash ../honeypot.sh alerts      has anyone tripped a wire?
+
+  Every 30-45 minutes, or any time something feels wrong:
+     sudo bash ../persistence.sh          full hunt
+     sudo bash ../users.sh audit          new accounts? new SSH keys?
+
+  On the Splunk box only, every 15 minutes:
+     sudo bash ../splunk.sh indexer       is EVERY box still forwarding?
+
+  Keep running in a second pane all day:
+     sudo bash ../honeypot.sh watch       live tripwire alerts
+
+
+ THE FIVE RULES THAT CHANGE WHAT YOU DO
+--------------------------------------------------------------------------------
+ 1. NO SOURCE-IP FILTERING on public services. Rule 9: it "may incur a penalty
+    when detected", and allow-listing only the scoring engine is PROHIBITED.
+    The kit refuses to do this. You may still block a specific attacking IP.
+ 2. NO SNAPSHOTS, NO SCRUBS, NO REVERTS. Rule 10. Every change is permanent.
+    Back up first. The firewall's 5-minute auto-revert is your only undo.
+ 3. MAINTAIN ICMP everywhere. Rule 12. Ping is a scored service.
+ 4. PASSWORDS YES, USERNAMES NEVER. Rule 11.
+ 5. NO SYSTEM NAME OR IP CHANGES. Rules 6 and 7.
+
+ Submit every password change at https://quotient.ccdc.events (PCR tab):
+     username,password
+
+
+ WHEN SOMETHING BREAKS
+--------------------------------------------------------------------------------
+  Locked out by the firewall   wait 5 min, it reverts itself
+                               or: sudo bash ../firewall.sh undo
+                               or from console: sudo sh /root/UNDO-FIREWALL.sh
+  SSH broke after hardening    the kit auto-restores sshd_config if it fails its
+                               test. From console:
+                                 cp /etc/ssh/sshd_config.bak.<newest> /etc/ssh/sshd_config
+                                 systemctl restart ssh
+  Service will not start       systemctl status <name>
+                               journalctl -u <name> -n 50
+                               On Rocky: getenforce ; ausearch -m avc -ts recent
+  Splunk up but 8000 down      sudo systemctl restart Splunkd ; wait 2 min
+                               (known Splunk 10 cold-start race)
+  Service keeps dying          that is someone killing it, not a crash:
+                               sudo bash ../persistence.sh
+  Lost the new passwords       shredded on purpose. Use the console and set them
+                               again: sudo sh ../plan-b/2-pw.sh <user>
+  Kit will not run at all      cat ../plan-b/PLAN-B.txt  (5 standalone sh scripts)
+
+
+ WHERE THE SCORE COMES FROM
+--------------------------------------------------------------------------------
+  40%  service uptime     -> watch.sh is what protects this
+  40%  injects            -> one person owns these FULL TIME from minute zero.
+                             Responses must be an attached PDF. NISE runs on
+                             Central time. Late = zero.
+  20%  incident response  -> write findings down AS YOU GO:
+                               echo "$(date '+%H:%M') <what, source IP>" >> /root/incidents.txt
+                             clean.sh bundles it all at the end.
+
+  Scoring runs every 2-4 minutes. An SLA hits after 5 failed checks, so you have
+  roughly 10-20 minutes to notice and fix anything. The watchdog notices in 30s.
+
+
+ MORE DETAIL
+--------------------------------------------------------------------------------
+  Each box folder has its own README.txt with that machine's traps.
+  FIELD-MANUAL.txt   everything, in depth -- PRINT THIS
+  COMMANDS.txt       every script, every mode, every setting
+  VERSION.txt        confirm you have the current kit
+  bash <script> --help   works on all 30 scripts
+================================================================================
