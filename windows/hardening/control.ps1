@@ -4,10 +4,8 @@
 #2. Ensure this script is in the same directory as the hardening scripts
 & "./delegation.ps1"
 & "./KerbLogging.ps1"
-& "./adminlockout.ps1"
 & "./firewall.ps1"
 & "./preauth.ps1"
 & "./setGroupPolicy.ps1"
-& "./netbios.ps1"
 & "./services.ps1"
 & "./sysminstall.ps1"
