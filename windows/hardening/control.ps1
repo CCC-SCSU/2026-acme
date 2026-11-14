@@ -8,4 +8,4 @@
 & "./preauth.ps1"
 & "./setGroupPolicy.ps1"
 & "./services.ps1"
-& "./sysminstall.ps1"
+#& "./sysminstall.ps1"
